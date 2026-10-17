@@ -1,0 +1,17 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-issue-forms.json
+# read more: https://docs.github.com/en/enterprise-cloud@latest/communities/using-templates-to-encourage-useful-issues-and-pull-requests/syntax-for-issue-forms
+
+# assignees: []
+body:
+  - attributes:
+      label: Description
+    id: description
+    type: textarea
+    validations:
+      required: true
+description: changes that affect the build system or external dependencies
+labels:
+  - dev::build
+name: System Build Improvements
+# projects: []
+# title: ""
