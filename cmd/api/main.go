@@ -3,9 +3,9 @@ package main
 import (
 	"net/http"
 	"strconv"
-	"task-manager/dto"
-	"task-manager/model"
-	"task-manager/repository"
+	"task-manager/internal/dto"
+	"task-manager/internal/model"
+	"task-manager/internal/repository"
 
 	"github.com/gin-gonic/gin"
 )

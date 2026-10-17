@@ -3,7 +3,7 @@ package repository
 import (
 	"errors"
 	"sync"
-	"task-manager/model"
+	"task-manager/internal/model"
 )
 
 var (
