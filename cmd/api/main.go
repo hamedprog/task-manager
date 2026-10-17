@@ -4,43 +4,30 @@ import (
 	"net/http"
 	"strconv"
 	"sync"
+	"task-manager/dto"
+	"task-manager/model"
 
 	"github.com/gin-gonic/gin"
 )
 
-type Task struct {
-	ID        int    `json:"id"`
-	Title     string `json:"title" binding:"required"`
-	Completed bool   `json:"completed"`
-}
-
-type CreateTaskRequest struct {
-	Title string `json:"title" binding:"required"`
-}
-
-type UpdateTaskRequest struct {
-	Title     *string `json:"title"`
-	Completed *bool   `json:"completed"`
-}
-
 type TaskStore struct {
 	mu     sync.RWMutex
-	tasks  map[int]Task
+	tasks  map[int]model.Task
 	nextID int
 }
 
 func NewTaskStore() *TaskStore {
 	return &TaskStore{
-		tasks:  make(map[int]Task),
+		tasks:  make(map[int]model.Task),
 		nextID: 1,
 	}
 }
 
-func (s *TaskStore) Create(title string) Task {
+func (s *TaskStore) Create(title string) model.Task {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	task := Task{
+	task := model.Task{
 		ID:        s.nextID,
 		Title:     title,
 		Completed: false,
@@ -52,11 +39,11 @@ func (s *TaskStore) Create(title string) Task {
 	return task
 }
 
-func (s *TaskStore) List() []Task {
+func (s *TaskStore) List() []model.Task {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	tasks := make([]Task, 0, len(s.tasks))
+	tasks := make([]model.Task, 0, len(s.tasks))
 	for _, task := range s.tasks {
 		tasks = append(tasks, task)
 	}
@@ -64,7 +51,7 @@ func (s *TaskStore) List() []Task {
 	return tasks
 }
 
-func (s *TaskStore) Get(id int) (Task, bool) {
+func (s *TaskStore) Get(id int) (model.Task, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -72,13 +59,13 @@ func (s *TaskStore) Get(id int) (Task, bool) {
 	return task, ok
 }
 
-func (s *TaskStore) Update(id int, req UpdateTaskRequest) (Task, bool) {
+func (s *TaskStore) Update(id int, req dto.UpdateTaskRequest) (model.Task, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	task, ok := s.tasks[id]
 	if !ok {
-		return Task{}, false
+		return model.Task{}, false
 	}
 
 	if req.Title != nil {
@@ -109,7 +96,7 @@ func main() {
 	router := gin.Default()
 
 	router.POST("/tasks", func(c *gin.Context) {
-		var req CreateTaskRequest
+		var req dto.CreateTaskRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
@@ -136,7 +123,9 @@ func main() {
 			return
 		}
 
-		c.JSON(http.StatusOK, task)
+		dtoTask := dto.TaskResponse{ID: task.ID, Title: task.Title, Completed: task.Completed}
+
+		c.JSON(http.StatusOK, dtoTask)
 	})
 
 	router.PATCH("/tasks/:id", func(c *gin.Context) {
@@ -146,7 +135,7 @@ func main() {
 			return
 		}
 
-		var req UpdateTaskRequest
+		var req dto.UpdateTaskRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
