@@ -3,96 +3,15 @@ package main
 import (
 	"net/http"
 	"strconv"
-	"sync"
 	"task-manager/dto"
 	"task-manager/model"
+	"task-manager/repository"
 
 	"github.com/gin-gonic/gin"
 )
 
-type TaskStore struct {
-	mu     sync.RWMutex
-	tasks  map[int]model.Task
-	nextID int
-}
-
-func NewTaskStore() *TaskStore {
-	return &TaskStore{
-		tasks:  make(map[int]model.Task),
-		nextID: 1,
-	}
-}
-
-func (s *TaskStore) Create(title string) model.Task {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	task := model.Task{
-		ID:        s.nextID,
-		Title:     title,
-		Completed: false,
-	}
-
-	s.tasks[task.ID] = task
-	s.nextID++
-
-	return task
-}
-
-func (s *TaskStore) List() []model.Task {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	tasks := make([]model.Task, 0, len(s.tasks))
-	for _, task := range s.tasks {
-		tasks = append(tasks, task)
-	}
-
-	return tasks
-}
-
-func (s *TaskStore) Get(id int) (model.Task, bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	task, ok := s.tasks[id]
-	return task, ok
-}
-
-func (s *TaskStore) Update(id int, req dto.UpdateTaskRequest) (model.Task, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	task, ok := s.tasks[id]
-	if !ok {
-		return model.Task{}, false
-	}
-
-	if req.Title != nil {
-		task.Title = *req.Title
-	}
-	if req.Completed != nil {
-		task.Completed = *req.Completed
-	}
-
-	s.tasks[id] = task
-	return task, true
-}
-
-func (s *TaskStore) Delete(id int) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if _, ok := s.tasks[id]; !ok {
-		return false
-	}
-
-	delete(s.tasks, id)
-	return true
-}
-
 func main() {
-	store := NewTaskStore()
+	repository := repository.NewTaskRepository()
 	router := gin.Default()
 
 	router.POST("/tasks", func(c *gin.Context) {
@@ -102,12 +21,18 @@ func main() {
 			return
 		}
 
-		task := store.Create(req.Title)
-		c.JSON(http.StatusCreated, task)
+		modelTask := model.Task{Title: req.Title}
+		repository.Create(&modelTask)
+		c.JSON(http.StatusCreated, modelTask)
 	})
 
 	router.GET("/tasks", func(c *gin.Context) {
-		c.JSON(http.StatusOK, store.List())
+		modelTasks, err := repository.List()
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "internal error"})
+			return
+		}
+		c.JSON(http.StatusOK, modelTasks)
 	})
 
 	router.GET("/tasks/:id", func(c *gin.Context) {
@@ -117,15 +42,15 @@ func main() {
 			return
 		}
 
-		task, ok := store.Get(id)
-		if !ok {
+		modelTask, err := repository.GetByID(id)
+		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "task not found"})
 			return
 		}
 
-		dtoTask := dto.TaskResponse{ID: task.ID, Title: task.Title, Completed: task.Completed}
+		dtoTaskResponse := dto.TaskResponse{ID: modelTask.ID, Title: modelTask.Title, Completed: modelTask.Completed}
 
-		c.JSON(http.StatusOK, dtoTask)
+		c.JSON(http.StatusOK, dtoTaskResponse)
 	})
 
 	router.PATCH("/tasks/:id", func(c *gin.Context) {
@@ -151,13 +76,19 @@ func main() {
 			return
 		}
 
-		task, ok := store.Update(id, req)
-		if !ok {
+		modelTask := model.Task{
+			Title:     *req.Title,
+			ID:        id,
+			Completed: *req.Completed,
+		}
+
+		err = repository.Update(&modelTask)
+		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "task not found"})
 			return
 		}
 
-		c.JSON(http.StatusOK, task)
+		c.JSON(http.StatusOK, modelTask)
 	})
 
 	router.DELETE("/tasks/:id", func(c *gin.Context) {
@@ -167,7 +98,8 @@ func main() {
 			return
 		}
 
-		if !store.Delete(id) {
+		err = repository.Delete(id)
+		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "task not found"})
 			return
 		}
