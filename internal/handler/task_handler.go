@@ -10,21 +10,21 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type TaskRepository interface {
-	Create(task *model.Task) error
+type TaskService interface {
+	Create(title string) (*model.Task, error)
 	List() ([]model.Task, error)
 	GetByID(id int) (*model.Task, error)
-	Update(task *model.Task) error
+	Update(id int, title *string, completed *bool) (*model.Task, error)
 	Delete(id int) error
 }
 
 type TaskHandler struct {
-	repository TaskRepository
+	service TaskService
 }
 
-func NewTaskHandler(repository TaskRepository) *TaskHandler {
+func NewTaskHandler(service TaskService) *TaskHandler {
 	return &TaskHandler{
-		repository: repository,
+		service: service,
 	}
 }
 
@@ -45,11 +45,12 @@ func (h *TaskHandler) Create(c *gin.Context) {
 		return
 	}
 
-	modelTask := model.Task{
-		Title: req.Title,
-	}
-
-	if err := h.repository.Create(&modelTask); err != nil {
+	modelTask, err := h.service.Create(req.Title)
+	if err != nil {
+		if err.Error() == "title cannot be empty" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
 		return
 	}
@@ -64,7 +65,7 @@ func (h *TaskHandler) Create(c *gin.Context) {
 }
 
 func (h *TaskHandler) List(c *gin.Context) {
-	modelTasks, err := h.repository.List()
+	modelTasks, err := h.service.List()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list tasks"})
 		return
@@ -88,7 +89,7 @@ func (h *TaskHandler) GetByID(c *gin.Context) {
 		return
 	}
 
-	modelTask, err := h.repository.GetByID(id)
+	modelTask, err := h.service.GetByID(id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "task not found"})
 		return
@@ -120,25 +121,16 @@ func (h *TaskHandler) Update(c *gin.Context) {
 		return
 	}
 
-	if dtoUpdateTaskRequest.Title != nil && *dtoUpdateTaskRequest.Title == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "title cannot be empty"})
-		return
-	}
-
-	modelTask, err := h.repository.GetByID(id)
+	modelTask, err := h.service.Update(id, dtoUpdateTaskRequest.Title, dtoUpdateTaskRequest.Completed)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "task not found"})
-		return
-	}
-
-	if dtoUpdateTaskRequest.Title != nil {
-		modelTask.Title = *dtoUpdateTaskRequest.Title
-	}
-	if dtoUpdateTaskRequest.Completed != nil {
-		modelTask.Completed = *dtoUpdateTaskRequest.Completed
-	}
-
-	if err := h.repository.Update(modelTask); err != nil {
+		if err.Error() == "title cannot be empty" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		if err.Error() == "task not found" {
+			c.JSON(http.StatusNotFound, gin.H{"error": "task not found"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update task"})
 		return
 	}
@@ -158,7 +150,7 @@ func (h *TaskHandler) Delete(c *gin.Context) {
 		return
 	}
 
-	if err := h.repository.Delete(id); err != nil {
+	if err := h.service.Delete(id); err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "task not found"})
 		return
 	}
