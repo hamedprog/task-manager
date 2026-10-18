@@ -1,84 +1,115 @@
 package repository
 
 import (
+	"context"
+	"database/sql"
 	"errors"
-	"sync"
+	"fmt"
+
 	"task-manager/internal/object/dao"
-	"task-manager/internal/service"
 )
 
-var (
-	ErrTaskNotFound = errors.New("task not found")
-)
+var ErrTaskNotFound = errors.New("task not found")
 
-type taskRepository struct {
-	mu     sync.RWMutex
-	tasks  map[int]dao.Task
-	nextID int
+type TaskRepository struct {
+	db *sql.DB
 }
 
-func NewTaskRepository() service.TaskRepository {
-	return &taskRepository{
-		tasks:  make(map[int]dao.Task),
-		nextID: 1,
+func NewTaskRepository(db *sql.DB) *TaskRepository {
+	return &TaskRepository{db: db}
+}
+
+func (r *TaskRepository) Initialize(ctx context.Context) error {
+	const query = `
+		CREATE TABLE IF NOT EXISTS tasks (
+			id SERIAL PRIMARY KEY,
+			title TEXT NOT NULL,
+			completed BOOLEAN NOT NULL DEFAULT FALSE
+		)`
+	if _, err := r.db.ExecContext(ctx, query); err != nil {
+		return fmt.Errorf("create tasks table: %w", err)
 	}
-}
-
-func (r *taskRepository) Create(task *dao.Task) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	task.ID = r.nextID
-	r.tasks[task.ID] = *task
-	r.nextID++
 
 	return nil
 }
 
-func (r *taskRepository) GetByID(id int) (*dao.Task, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	task, exists := r.tasks[id]
-	if !exists {
-		return nil, ErrTaskNotFound
+func (r *TaskRepository) Create(task *dao.Task) error {
+	const query = `INSERT INTO tasks (title, completed) VALUES ($1, $2) RETURNING id`
+	if err := r.db.QueryRow(query, task.Title, task.Completed).Scan(&task.ID); err != nil {
+		return fmt.Errorf("create task: %w", err)
 	}
 
-	return &task, nil
+	return nil
 }
 
-func (r *taskRepository) List() ([]dao.Task, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
+func (r *TaskRepository) GetByID(id int) (*dao.Task, error) {
+	const query = `SELECT id, title, completed FROM tasks WHERE id = $1`
+	task := &dao.Task{}
+	if err := r.db.QueryRow(query, id).Scan(&task.ID, &task.Title, &task.Completed); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrTaskNotFound
+		}
+		return nil, fmt.Errorf("get task by ID: %w", err)
+	}
 
-	tasks := make([]dao.Task, 0, len(r.tasks))
-	for _, task := range r.tasks {
+	return task, nil
+}
+
+func (r *TaskRepository) List() ([]dao.Task, error) {
+	const query = `SELECT id, title, completed FROM tasks ORDER BY id`
+	rows, err := r.db.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("list tasks: %w", err)
+	}
+	defer rows.Close()
+
+	tasks := make([]dao.Task, 0)
+	for rows.Next() {
+		var task dao.Task
+		if err := rows.Scan(&task.ID, &task.Title, &task.Completed); err != nil {
+			return nil, fmt.Errorf("scan task: %w", err)
+		}
 		tasks = append(tasks, task)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate tasks: %w", err)
 	}
 
 	return tasks, nil
 }
 
-func (r *taskRepository) Update(task *dao.Task) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+func (r *TaskRepository) Update(task *dao.Task) error {
+	const query = `UPDATE tasks SET title = $1, completed = $2 WHERE id = $3`
+	result, err := r.db.Exec(query, task.Title, task.Completed, task.ID)
+	if err != nil {
+		return fmt.Errorf("update task: %w", err)
+	}
 
-	if _, exists := r.tasks[task.ID]; !exists {
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("get updated task count: %w", err)
+	}
+	if rowsAffected == 0 {
 		return ErrTaskNotFound
 	}
 
-	r.tasks[task.ID] = *task
 	return nil
 }
 
-func (r *taskRepository) Delete(id int) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+func (r *TaskRepository) Delete(id int) error {
+	const query = `DELETE FROM tasks WHERE id = $1`
+	result, err := r.db.Exec(query, id)
+	if err != nil {
+		return fmt.Errorf("delete task: %w", err)
+	}
 
-	if _, exists := r.tasks[id]; !exists {
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("get deleted task count: %w", err)
+	}
+	if rowsAffected == 0 {
 		return ErrTaskNotFound
 	}
 
-	delete(r.tasks, id)
 	return nil
 }
