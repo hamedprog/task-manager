@@ -1,0 +1,58 @@
+{
+  "[go]": {
+    "editor.defaultFormatter": "golang.go"
+  },
+  "diffEditor.ignoreTrimWhitespace": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.guides.bracketPairs": "active",
+  "editor.inlineSuggest.enabled": true,
+  "editor.tabSize": 2,
+  "go.coverOnSave": true,
+  "go.coverageDecorator": {
+    "coveredBorderColor": "rgba(64,128,128,0.5)",
+    "coveredGutterStyle": "blockgreen",
+    "coveredHighlightColor": "rgba(64,128,128,0.5)",
+    "type": "gutter",
+    "uncoveredBorderColor": "rgba(128,64,64,0.25)",
+    "uncoveredGutterStyle": "blockred",
+    "uncoveredHighlightColor": "rgba(128,64,64,0.25)"
+  },
+  "go.inlayHints.functionTypeParameters": false,
+  "go.lintOnSave": "workspace",
+  "go.lintTool": "golangci-lint",
+  "go.toolsManagement.autoUpdate": true,
+  "gopls": {
+    "ui.codelenses": {
+      "gc_details": true,
+      "generate": true,
+      "regenerate_cgo": true,
+      "run_govulncheck": true,
+      "test": false,
+      "tidy": true,
+      "upgrade_dependency": true,
+      "vendor": true
+    },
+    "formatting.gofumpt": true,
+    "ui.diagnostic.analyses": {
+      "fieldalignment": true,
+      "shadow": true,
+      "unusedparams": false,
+      "unusedwrite": true,
+      "useany": true
+    },
+    "ui.semanticTokens": true
+  },
+  "sqltools.connections": [
+    {
+        "name": "TaskManager Local",
+        "driver": "PostgreSQL",
+        "server": "localhost",
+        "port": 5432,
+        "database": "taskmanager",
+        "username": "taskmanager",
+        "password": "taskmanager",
+        "ssl": false
+    },
+  ],
+  "yaml.customTags": ["!reference sequence"]
+}

@@ -1,0 +1,14 @@
+{
+  "recommendations": [
+    "IBM.output-colorizer",
+    "PascalReitermann93.vscode-yaml-sort",
+    "Tyriar.sort-lines",
+    "eamodio.gitlens",
+    "esbenp.prettier-vscode",
+    "golang.go",
+    "ms-azuretools.vscode-docker",
+    "quicktype.quicktype",
+    "redhat.vscode-yaml",
+    "streetsidesoftware.code-spell-checker",
+  ]
+}
