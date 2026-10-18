@@ -34,7 +34,6 @@
     },
     "formatting.gofumpt": true,
     "ui.diagnostic.analyses": {
-      "fieldalignment": true,
       "shadow": true,
       "unusedparams": false,
       "unusedwrite": true,
