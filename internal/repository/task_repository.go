@@ -3,8 +3,8 @@ package repository
 import (
 	"errors"
 	"sync"
-	"task-manager/internal/handler"
 	"task-manager/internal/model"
+	"task-manager/internal/service"
 )
 
 var (
@@ -17,7 +17,7 @@ type taskRepository struct {
 	nextID int
 }
 
-func NewTaskRepository() handler.TaskRepository {
+func NewTaskRepository() service.TaskRepository {
 	return &taskRepository{
 		tasks:  make(map[int]model.Task),
 		nextID: 1,
