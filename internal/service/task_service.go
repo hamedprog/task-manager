@@ -3,16 +3,18 @@ package service
 import (
 	"errors"
 	"strings"
-	"task-manager/internal/model"
+
+	"task-manager/internal/object/bo"
+	"task-manager/internal/object/dao"
 )
 
 var ErrTaskNotFound = errors.New("task not found")
 
 type TaskRepository interface {
-	Create(task *model.Task) error
-	List() ([]model.Task, error)
-	GetByID(id int) (*model.Task, error)
-	Update(task *model.Task) error
+	Create(task *dao.Task) error
+	List() ([]dao.Task, error)
+	GetByID(id int) (*dao.Task, error)
+	Update(task *dao.Task) error
 	Delete(id int) error
 }
 
@@ -24,53 +26,82 @@ func NewTaskService(repository TaskRepository) *TaskService {
 	return &TaskService{repository: repository}
 }
 
-func (s *TaskService) Create(title string) (*model.Task, error) {
-	title = strings.TrimSpace(title)
+func (s *TaskService) Create(boTask bo.Task) (*bo.Task, error) {
+	title := ""
+	if boTask.Title != nil {
+		title = strings.TrimSpace(*boTask.Title)
+	}
 	if title == "" {
 		return nil, errors.New("title cannot be empty")
 	}
 
-	modelTask := &model.Task{Title: title}
-	if err := s.repository.Create(modelTask); err != nil {
+	daoTask := &dao.Task{Title: title}
+	if err := s.repository.Create(daoTask); err != nil {
 		return nil, err
 	}
 
-	return modelTask, nil
+	return toBusinessTask(daoTask), nil
 }
 
-func (s *TaskService) List() ([]model.Task, error) {
-	return s.repository.List()
+func (s *TaskService) List() ([]bo.Task, error) {
+	daoTasks, err := s.repository.List()
+	if err != nil {
+		return nil, err
+	}
+
+	tasks := make([]bo.Task, 0, len(daoTasks))
+	for i := range daoTasks {
+		tasks = append(tasks, *toBusinessTask(&daoTasks[i]))
+	}
+
+	return tasks, nil
 }
 
-func (s *TaskService) GetByID(id int) (*model.Task, error) {
-	return s.repository.GetByID(id)
+func (s *TaskService) GetByID(id int) (*bo.Task, error) {
+	daoTask, err := s.repository.GetByID(id)
+	if err != nil {
+		return nil, err
+	}
+
+	return toBusinessTask(daoTask), nil
 }
 
-func (s *TaskService) Update(id int, title *string, completed *bool) (*model.Task, error) {
-	modelTask, err := s.repository.GetByID(id)
+func (s *TaskService) Update(task bo.Task) (*bo.Task, error) {
+	daoTask, err := s.repository.GetByID(task.ID)
 	if err != nil {
 		return nil, ErrTaskNotFound
 	}
 
-	if title != nil {
-		trimmedTitle := strings.TrimSpace(*title)
+	if task.Title != nil {
+		trimmedTitle := strings.TrimSpace(*task.Title)
 		if trimmedTitle == "" {
 			return nil, errors.New("title cannot be empty")
 		}
-		modelTask.Title = trimmedTitle
+		daoTask.Title = trimmedTitle
 	}
 
-	if completed != nil {
-		modelTask.Completed = *completed
+	if task.Completed != nil {
+		daoTask.Completed = *task.Completed
 	}
 
-	if err := s.repository.Update(modelTask); err != nil {
+	if err := s.repository.Update(daoTask); err != nil {
 		return nil, err
 	}
 
-	return modelTask, nil
+	return toBusinessTask(daoTask), nil
 }
 
 func (s *TaskService) Delete(id int) error {
 	return s.repository.Delete(id)
+}
+
+func toBusinessTask(task *dao.Task) *bo.Task {
+	title := task.Title
+	completed := task.Completed
+
+	return &bo.Task{
+		ID:        task.ID,
+		Title:     &title,
+		Completed: &completed,
+	}
 }

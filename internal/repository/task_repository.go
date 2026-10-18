@@ -3,7 +3,7 @@ package repository
 import (
 	"errors"
 	"sync"
-	"task-manager/internal/model"
+	"task-manager/internal/object/dao"
 	"task-manager/internal/service"
 )
 
@@ -13,18 +13,18 @@ var (
 
 type taskRepository struct {
 	mu     sync.RWMutex
-	tasks  map[int]model.Task
+	tasks  map[int]dao.Task
 	nextID int
 }
 
 func NewTaskRepository() service.TaskRepository {
 	return &taskRepository{
-		tasks:  make(map[int]model.Task),
+		tasks:  make(map[int]dao.Task),
 		nextID: 1,
 	}
 }
 
-func (r *taskRepository) Create(task *model.Task) error {
+func (r *taskRepository) Create(task *dao.Task) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -35,7 +35,7 @@ func (r *taskRepository) Create(task *model.Task) error {
 	return nil
 }
 
-func (r *taskRepository) GetByID(id int) (*model.Task, error) {
+func (r *taskRepository) GetByID(id int) (*dao.Task, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -47,11 +47,11 @@ func (r *taskRepository) GetByID(id int) (*model.Task, error) {
 	return &task, nil
 }
 
-func (r *taskRepository) List() ([]model.Task, error) {
+func (r *taskRepository) List() ([]dao.Task, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	tasks := make([]model.Task, 0, len(r.tasks))
+	tasks := make([]dao.Task, 0, len(r.tasks))
 	for _, task := range r.tasks {
 		tasks = append(tasks, task)
 	}
@@ -59,7 +59,7 @@ func (r *taskRepository) List() ([]model.Task, error) {
 	return tasks, nil
 }
 
-func (r *taskRepository) Update(task *model.Task) error {
+func (r *taskRepository) Update(task *dao.Task) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 

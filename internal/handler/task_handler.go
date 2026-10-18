@@ -4,17 +4,17 @@ import (
 	"net/http"
 	"strconv"
 
-	"task-manager/internal/dto"
-	"task-manager/internal/model"
+	"task-manager/internal/object/bo"
+	"task-manager/internal/object/dto"
 
 	"github.com/gin-gonic/gin"
 )
 
 type TaskService interface {
-	Create(title string) (*model.Task, error)
-	List() ([]model.Task, error)
-	GetByID(id int) (*model.Task, error)
-	Update(id int, title *string, completed *bool) (*model.Task, error)
+	Create(task bo.Task) (*bo.Task, error)
+	List() ([]bo.Task, error)
+	GetByID(id int) (*bo.Task, error)
+	Update(task bo.Task) (*bo.Task, error)
 	Delete(id int) error
 }
 
@@ -45,7 +45,7 @@ func (h *TaskHandler) Create(c *gin.Context) {
 		return
 	}
 
-	modelTask, err := h.service.Create(req.Title)
+	boTask, err := h.service.Create(bo.Task{Title: &req.Title})
 	if err != nil {
 		if err.Error() == "title cannot be empty" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -56,27 +56,27 @@ func (h *TaskHandler) Create(c *gin.Context) {
 	}
 
 	dtoTaskResponse := dto.TaskResponse{
-		ID:        modelTask.ID,
-		Title:     modelTask.Title,
-		Completed: modelTask.Completed,
+		ID:        boTask.ID,
+		Title:     *boTask.Title,
+		Completed: *boTask.Completed,
 	}
 
 	c.JSON(http.StatusCreated, dtoTaskResponse)
 }
 
 func (h *TaskHandler) List(c *gin.Context) {
-	modelTasks, err := h.service.List()
+	boTasks, err := h.service.List()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list tasks"})
 		return
 	}
 
-	dtoTaskResponses := make([]dto.TaskResponse, 0, len(modelTasks))
-	for _, task := range modelTasks {
+	dtoTaskResponses := make([]dto.TaskResponse, 0, len(boTasks))
+	for _, task := range boTasks {
 		dtoTaskResponses = append(dtoTaskResponses, dto.TaskResponse{
 			ID:        task.ID,
-			Title:     task.Title,
-			Completed: task.Completed,
+			Title:     *task.Title,
+			Completed: *task.Completed,
 		})
 	}
 
@@ -89,16 +89,16 @@ func (h *TaskHandler) GetByID(c *gin.Context) {
 		return
 	}
 
-	modelTask, err := h.service.GetByID(id)
+	boTask, err := h.service.GetByID(id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "task not found"})
 		return
 	}
 
 	dtoTaskResponse := dto.TaskResponse{
-		ID:        modelTask.ID,
-		Title:     modelTask.Title,
-		Completed: modelTask.Completed,
+		ID:        boTask.ID,
+		Title:     *boTask.Title,
+		Completed: *boTask.Completed,
 	}
 
 	c.JSON(http.StatusOK, dtoTaskResponse)
@@ -121,7 +121,11 @@ func (h *TaskHandler) Update(c *gin.Context) {
 		return
 	}
 
-	modelTask, err := h.service.Update(id, dtoUpdateTaskRequest.Title, dtoUpdateTaskRequest.Completed)
+	boTask, err := h.service.Update(bo.Task{
+		ID:        id,
+		Title:     dtoUpdateTaskRequest.Title,
+		Completed: dtoUpdateTaskRequest.Completed,
+	})
 	if err != nil {
 		if err.Error() == "title cannot be empty" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -136,9 +140,9 @@ func (h *TaskHandler) Update(c *gin.Context) {
 	}
 
 	dtoTaskResponse := dto.TaskResponse{
-		ID:        modelTask.ID,
-		Title:     modelTask.Title,
-		Completed: modelTask.Completed,
+		ID:        boTask.ID,
+		Title:     *boTask.Title,
+		Completed: *boTask.Completed,
 	}
 
 	c.JSON(http.StatusOK, dtoTaskResponse)
