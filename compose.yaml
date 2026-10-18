@@ -1,4 +1,14 @@
 services:
+  api:
+    build: .
+    environment:
+      DATABASE_URL: postgres://taskmanager:taskmanager@postgres:5432/taskmanager?sslmode=disable
+    ports:
+      - "9090:9090"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   postgres:
     image: postgres:17
     environment:

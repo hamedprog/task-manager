@@ -2,18 +2,26 @@
 
 ## Run with PostgreSQL
 
-Start PostgreSQL:
+Build and start the API and PostgreSQL with Docker Compose:
+
+```sh
+docker compose up --build
+```
+
+The API is available at `http://localhost:9090`. To run the API directly on
+your machine instead, start PostgreSQL:
 
 ```sh
 docker compose up -d postgres
 ```
 
-The API uses the default local connection string
-`postgres://taskmanager:taskmanager@localhost:5432/taskmanager?sslmode=disable`.
-Set `DATABASE_URL` to override it, then start the API:
+Then run:
 
 ```sh
 go run ./cmd/api
 ```
 
-The API creates the `tasks` table at startup if it does not already exist.
+The API uses
+`postgres://taskmanager:taskmanager@localhost:5432/taskmanager?sslmode=disable`
+by default when run locally. Set `DATABASE_URL` to override it. The `tasks`
+table is created at API startup if it does not already exist.
