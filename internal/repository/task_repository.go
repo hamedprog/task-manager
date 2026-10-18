@@ -3,6 +3,7 @@ package repository
 import (
 	"errors"
 	"sync"
+	"task-manager/internal/handler"
 	"task-manager/internal/model"
 )
 
@@ -10,21 +11,13 @@ var (
 	ErrTaskNotFound = errors.New("task not found")
 )
 
-type TaskRepository interface {
-	Create(task *model.Task) error
-	GetByID(id int) (*model.Task, error)
-	List() ([]model.Task, error)
-	Update(task *model.Task) error
-	Delete(id int) error
-}
-
 type taskRepository struct {
 	mu     sync.RWMutex
 	tasks  map[int]model.Task
 	nextID int
 }
 
-func NewTaskRepository() TaskRepository {
+func NewTaskRepository() handler.TaskRepository {
 	return &taskRepository{
 		tasks:  make(map[int]model.Task),
 		nextID: 1,
