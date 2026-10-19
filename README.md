@@ -25,3 +25,21 @@ The API uses
 `postgres://taskmanager:taskmanager@localhost:5432/taskmanager?sslmode=disable`
 by default when run locally. Set `DATABASE_URL` to override it. The `tasks`
 table is created at API startup if it does not already exist.
+
+## API definition and code generation
+
+The OpenAPI 3 contract is maintained in `api/openapi.yaml`. Generated request
+and response types and Gin route bindings are written to `internal/api/` using
+`codgen.yaml`.
+
+Regenerate API code and repository mocks with:
+
+```sh
+make generate
+```
+
+To regenerate only the API types and Gin bindings:
+
+```sh
+make generate-api
+```
