@@ -11,6 +11,9 @@ docker compose up --build
 The API is available at `http://localhost:9090`. To run the API directly on
 your machine instead, start PostgreSQL:
 
+Swagger UI is available at `http://localhost:8080` and loads its API definition
+from `api/openapi.yaml`.
+
 ```sh
 docker compose up -d postgres
 ```
