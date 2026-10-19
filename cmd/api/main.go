@@ -57,10 +57,6 @@ func run() (runErr error) {
 	}
 
 	taskRepository := repository.NewTaskRepository(db)
-	if err := taskRepository.Initialize(ctx); err != nil {
-		return err
-	}
-
 	taskService := service.NewTaskService(taskRepository)
 	taskHandler := handler.NewTaskHandler(taskService)
 	router := gin.Default()

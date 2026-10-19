@@ -1,5 +1,9 @@
 .DEFAULT_GOAL := help
-SHELL = /bin/sh
+
+MIGRATE_DB_NAME := taskmanager
+MIGRATE_DSN := "postgres://taskmanager:taskmanager@localhost:5432/$(MIGRATE_DB_NAME)?sslmode=disable"
+MIGRATE_VER := development
+MIGRATE_SOURCE := file://db/$(MIGRATE_DB_NAME)/$(MIGRATE_VER)
 
 .PHONY: generate
 generate: ## Generate
@@ -25,3 +29,11 @@ help: ## Help
 .PHONY: test
 test: ## Test
 	go test ./... -count=1 -covermode=atomic
+
+.PHONY: migrate-up
+migrate-up: ## Migrate Up
+	migrate -database=$(MIGRATE_DSN) -source=$(MIGRATE_SOURCE) -verbose up
+
+.PHONY: migrate-down
+migrate-down: ## Migrate Down
+	migrate -database=$(MIGRATE_DSN) -source=$(MIGRATE_SOURCE) -verbose down 1
