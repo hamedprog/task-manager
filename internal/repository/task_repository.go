@@ -24,7 +24,8 @@ func (r *TaskRepository) Initialize(ctx context.Context) error {
 		CREATE TABLE IF NOT EXISTS tasks (
 			id SERIAL PRIMARY KEY,
 			title TEXT NOT NULL,
-			completed BOOLEAN NOT NULL DEFAULT FALSE
+			completed BOOLEAN NOT NULL DEFAULT FALSE,
+			assignee TEXT NOT NULL DEFAULT ''
 		)`
 	if _, err := r.db.ExecContext(ctx, query); err != nil {
 		return fmt.Errorf("create tasks table: %w", err)
@@ -34,8 +35,8 @@ func (r *TaskRepository) Initialize(ctx context.Context) error {
 }
 
 func (r *TaskRepository) Create(task *dao.Task) error {
-	const query = `INSERT INTO tasks (title, completed) VALUES ($1, $2) RETURNING id`
-	if err := r.db.QueryRow(query, task.Title, task.Completed).Scan(&task.ID); err != nil {
+	const query = `INSERT INTO tasks (title, completed, assignee) VALUES ($1, $2, $3) RETURNING id`
+	if err := r.db.QueryRow(query, task.Title, task.Completed, task.Assignee).Scan(&task.ID); err != nil {
 		return fmt.Errorf("create task: %w", err)
 	}
 
@@ -43,9 +44,9 @@ func (r *TaskRepository) Create(task *dao.Task) error {
 }
 
 func (r *TaskRepository) GetByID(id int) (*dao.Task, error) {
-	const query = `SELECT id, title, completed FROM tasks WHERE id = $1`
+	const query = `SELECT id, title, completed, assignee FROM tasks WHERE id = $1`
 	task := &dao.Task{}
-	if err := r.db.QueryRow(query, id).Scan(&task.ID, &task.Title, &task.Completed); err != nil {
+	if err := r.db.QueryRow(query, id).Scan(&task.ID, &task.Title, &task.Completed, &task.Assignee); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrTaskNotFound
 		}
@@ -56,7 +57,7 @@ func (r *TaskRepository) GetByID(id int) (*dao.Task, error) {
 }
 
 func (r *TaskRepository) List() ([]dao.Task, error) {
-	const query = `SELECT id, title, completed FROM tasks ORDER BY id`
+	const query = `SELECT id, title, completed, assignee FROM tasks ORDER BY id`
 	rows, err := r.db.Query(query)
 	if err != nil {
 		return nil, fmt.Errorf("list tasks: %w", err)
@@ -66,7 +67,7 @@ func (r *TaskRepository) List() ([]dao.Task, error) {
 	tasks := make([]dao.Task, 0)
 	for rows.Next() {
 		var task dao.Task
-		if err := rows.Scan(&task.ID, &task.Title, &task.Completed); err != nil {
+		if err := rows.Scan(&task.ID, &task.Title, &task.Completed, &task.Assignee); err != nil {
 			return nil, fmt.Errorf("scan task: %w", err)
 		}
 		tasks = append(tasks, task)
@@ -79,8 +80,8 @@ func (r *TaskRepository) List() ([]dao.Task, error) {
 }
 
 func (r *TaskRepository) Update(task *dao.Task) error {
-	const query = `UPDATE tasks SET title = $1, completed = $2 WHERE id = $3`
-	result, err := r.db.Exec(query, task.Title, task.Completed, task.ID)
+	const query = `UPDATE tasks SET title = $1, completed = $2, assignee = $3 WHERE id = $4`
+	result, err := r.db.Exec(query, task.Title, task.Completed, task.Assignee, task.ID)
 	if err != nil {
 		return fmt.Errorf("update task: %w", err)
 	}

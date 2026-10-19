@@ -40,7 +40,12 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 		return
 	}
 
-	boTask, err := h.service.Create(bo.Task{Title: &req.Title})
+	assignee := ""
+	if req.Assignee != nil {
+		assignee = *req.Assignee
+	}
+
+	boTask, err := h.service.Create(bo.Task{Title: &req.Title, Assignee: &assignee})
 	if err != nil {
 		if err.Error() == "title cannot be empty" {
 			c.JSON(http.StatusBadRequest, api.Error{Error: err.Error()})
@@ -54,6 +59,7 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 		Id:        int32(boTask.ID),
 		Title:     *boTask.Title,
 		Completed: *boTask.Completed,
+		Assignee:  *boTask.Assignee,
 	}
 
 	c.JSON(http.StatusCreated, apiTask)
@@ -72,6 +78,7 @@ func (h *TaskHandler) ListTasks(c *gin.Context) {
 			Id:        int32(task.ID),
 			Title:     *task.Title,
 			Completed: *task.Completed,
+			Assignee:  *task.Assignee,
 		})
 	}
 
@@ -94,6 +101,7 @@ func (h *TaskHandler) GetTask(c *gin.Context, id int) {
 		Id:        int32(boTask.ID),
 		Title:     *boTask.Title,
 		Completed: *boTask.Completed,
+		Assignee:  *boTask.Assignee,
 	}
 
 	c.JSON(http.StatusOK, apiTask)
@@ -111,7 +119,7 @@ func (h *TaskHandler) UpdateTask(c *gin.Context, id int) {
 		return
 	}
 
-	if apiUpdateTaskRequest.Title == nil && apiUpdateTaskRequest.Completed == nil {
+	if apiUpdateTaskRequest.Title == nil && apiUpdateTaskRequest.Completed == nil && apiUpdateTaskRequest.Assignee == nil {
 		c.JSON(http.StatusBadRequest, api.Error{Error: "no fields to update"})
 		return
 	}
@@ -120,6 +128,7 @@ func (h *TaskHandler) UpdateTask(c *gin.Context, id int) {
 		ID:        id,
 		Title:     apiUpdateTaskRequest.Title,
 		Completed: apiUpdateTaskRequest.Completed,
+		Assignee:  apiUpdateTaskRequest.Assignee,
 	})
 	if err != nil {
 		if err.Error() == "title cannot be empty" {
@@ -138,6 +147,7 @@ func (h *TaskHandler) UpdateTask(c *gin.Context, id int) {
 		Id:        int32(boTask.ID),
 		Title:     *boTask.Title,
 		Completed: *boTask.Completed,
+		Assignee:  *boTask.Assignee,
 	}
 
 	c.JSON(http.StatusOK, aptTask)

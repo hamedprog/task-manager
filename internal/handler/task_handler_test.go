@@ -42,8 +42,29 @@ func TestTaskHandlerCreateTask(t *testing.T) {
 	t.Run("created", func(t *testing.T) {
 		service, handler := newMockTaskHandler(t)
 		service.EXPECT().
-			Create(gomock.Eq(bo.Task{Title: stringPointer("Write tests")})).
-			Return(&bo.Task{ID: 3, Title: stringPointer("Write tests"), Completed: boolPointer(false)}, nil)
+			Create(gomock.Eq(bo.Task{Title: stringPointer("Write tests"), Assignee: stringPointer("Alex")})).
+			Return(&bo.Task{ID: 3, Title: stringPointer("Write tests"), Completed: boolPointer(false), Assignee: stringPointer("Alex")}, nil)
+		context, recorder := newTestContext(http.MethodPost, `{"title":"Write tests","assignee":"Alex"}`)
+
+		handler.CreateTask(context)
+
+		if recorder.Code != http.StatusCreated {
+			t.Fatalf("status = %d, want %d", recorder.Code, http.StatusCreated)
+		}
+		var got api.Task
+		if err := json.Unmarshal(recorder.Body.Bytes(), &got); err != nil {
+			t.Fatalf("decode response: %v", err)
+		}
+		if got != (api.Task{Id: 3, Title: "Write tests", Assignee: "Alex"}) {
+			t.Errorf("response = %+v, want created task", got)
+		}
+	})
+
+	t.Run("missing assignee defaults to empty", func(t *testing.T) {
+		service, handler := newMockTaskHandler(t)
+		service.EXPECT().
+			Create(gomock.Eq(bo.Task{Title: stringPointer("Write tests"), Assignee: stringPointer("")})).
+			Return(&bo.Task{ID: 3, Title: stringPointer("Write tests"), Completed: boolPointer(false), Assignee: stringPointer("")}, nil)
 		context, recorder := newTestContext(http.MethodPost, `{"title":"Write tests"}`)
 
 		handler.CreateTask(context)
@@ -55,8 +76,8 @@ func TestTaskHandlerCreateTask(t *testing.T) {
 		if err := json.Unmarshal(recorder.Body.Bytes(), &got); err != nil {
 			t.Fatalf("decode response: %v", err)
 		}
-		if got != (api.Task{Id: 3, Title: "Write tests"}) {
-			t.Errorf("response = %+v, want created task", got)
+		if got.Assignee != "" {
+			t.Errorf("response assignee = %q, want empty", got.Assignee)
 		}
 	})
 
@@ -111,8 +132,8 @@ func TestTaskHandlerListTasks(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		service, handler := newMockTaskHandler(t)
 		service.EXPECT().List().Return([]bo.Task{
-			{ID: 1, Title: stringPointer("First"), Completed: boolPointer(false)},
-			{ID: 2, Title: stringPointer("Second"), Completed: boolPointer(true)},
+			{ID: 1, Title: stringPointer("First"), Completed: boolPointer(false), Assignee: stringPointer("Alex")},
+			{ID: 2, Title: stringPointer("Second"), Completed: boolPointer(true), Assignee: stringPointer("Sam")},
 		}, nil)
 		context, recorder := newTestContext(http.MethodGet, "")
 
@@ -126,8 +147,8 @@ func TestTaskHandlerListTasks(t *testing.T) {
 			t.Fatalf("decode response: %v", err)
 		}
 		want := []api.Task{
-			{Id: 1, Title: "First"},
-			{Id: 2, Title: "Second", Completed: true},
+			{Id: 1, Title: "First", Assignee: "Alex"},
+			{Id: 2, Title: "Second", Completed: true, Assignee: "Sam"},
 		}
 		if len(got) != len(want) {
 			t.Fatalf("response has %d tasks, want %d", len(got), len(want))
@@ -157,7 +178,7 @@ func TestTaskHandlerGetTask(t *testing.T) {
 		service, handler := newMockTaskHandler(t)
 		service.EXPECT().
 			GetByID(4).
-			Return(&bo.Task{ID: 4, Title: stringPointer("Read docs"), Completed: boolPointer(true)}, nil)
+			Return(&bo.Task{ID: 4, Title: stringPointer("Read docs"), Completed: boolPointer(true), Assignee: stringPointer("Alex")}, nil)
 		context, recorder := newTestContext(http.MethodGet, "")
 
 		handler.GetTask(context, 4)
@@ -169,7 +190,7 @@ func TestTaskHandlerGetTask(t *testing.T) {
 		if err := json.Unmarshal(recorder.Body.Bytes(), &got); err != nil {
 			t.Fatalf("decode response: %v", err)
 		}
-		if got != (api.Task{Id: 4, Title: "Read docs", Completed: true}) {
+		if got != (api.Task{Id: 4, Title: "Read docs", Completed: true, Assignee: "Alex"}) {
 			t.Errorf("response = %+v, want task 4", got)
 		}
 	})
@@ -206,9 +227,10 @@ func TestTaskHandlerUpdateTask(t *testing.T) {
 				ID:        4,
 				Title:     stringPointer("Updated"),
 				Completed: boolPointer(true),
+				Assignee:  stringPointer("Alex"),
 			})).
-			Return(&bo.Task{ID: 4, Title: stringPointer("Updated"), Completed: boolPointer(true)}, nil)
-		context, recorder := newTestContext(http.MethodPatch, `{"title":"Updated","completed":true}`)
+			Return(&bo.Task{ID: 4, Title: stringPointer("Updated"), Completed: boolPointer(true), Assignee: stringPointer("Alex")}, nil)
+		context, recorder := newTestContext(http.MethodPatch, `{"title":"Updated","completed":true,"assignee":"Alex"}`)
 
 		handler.UpdateTask(context, 4)
 
@@ -219,8 +241,34 @@ func TestTaskHandlerUpdateTask(t *testing.T) {
 		if err := json.Unmarshal(recorder.Body.Bytes(), &got); err != nil {
 			t.Fatalf("decode response: %v", err)
 		}
-		if got != (api.Task{Id: 4, Title: "Updated", Completed: true}) {
+		if got != (api.Task{Id: 4, Title: "Updated", Completed: true, Assignee: "Alex"}) {
 			t.Errorf("response = %+v, want updated task", got)
+		}
+	})
+
+	t.Run("assignee only", func(t *testing.T) {
+		service, handler := newMockTaskHandler(t)
+		service.EXPECT().
+			Update(gomock.Eq(bo.Task{ID: 4, Assignee: stringPointer("Sam")})).
+			Return(&bo.Task{
+				ID:        4,
+				Title:     stringPointer("Existing task"),
+				Completed: boolPointer(false),
+				Assignee:  stringPointer("Sam"),
+			}, nil)
+		context, recorder := newTestContext(http.MethodPatch, `{"assignee":"Sam"}`)
+
+		handler.UpdateTask(context, 4)
+
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", recorder.Code, http.StatusOK)
+		}
+		var got api.Task
+		if err := json.Unmarshal(recorder.Body.Bytes(), &got); err != nil {
+			t.Fatalf("decode response: %v", err)
+		}
+		if got.Assignee != "Sam" {
+			t.Errorf("response assignee = %q, want %q", got.Assignee, "Sam")
 		}
 	})
 
