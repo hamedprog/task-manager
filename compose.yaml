@@ -9,6 +9,34 @@ services:
       postgres:
         condition: service_healthy
 
+  swagger:
+    container_name: swagger-ui
+    environment:
+      SWAGGER_JSON: /openapi.yaml
+    healthcheck:
+      interval: 10s
+      retries: 5
+      start_period: 10s
+      test:
+        [
+          "CMD",
+          "/wget",
+          "--no-verbose",
+          "--spider",
+          "--tries=1",
+          "http://swagger-ui:7007/swagger",
+        ]
+      timeout: 5s
+    image: swaggerapi/swagger-ui
+    labels:
+      namespace: swagger-ui
+    ports:
+      - "8080:8080"
+    restart: no
+    volumes:
+      - ./api/openapi.yaml:/openapi.yaml:ro
+
+
   postgres:
     image: postgres:17
     environment:

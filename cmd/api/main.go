@@ -11,6 +11,7 @@ import (
 	"task-manager/internal/repository"
 	"task-manager/internal/service"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
@@ -47,6 +48,7 @@ func run() error {
 	taskService := service.NewTaskService(taskRepository)
 	taskHandler := handler.NewTaskHandler(taskService)
 	router := gin.Default()
+	router.Use(cors.Default())
 	taskHandler.RegisterRoutes(router)
 
 	return router.Run(":9090")
