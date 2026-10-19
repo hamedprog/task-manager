@@ -1,7 +1,6 @@
 package repository
 
 import (
-	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -17,21 +16,6 @@ type TaskRepository struct {
 
 func NewTaskRepository(db *sql.DB) *TaskRepository {
 	return &TaskRepository{db: db}
-}
-
-func (r *TaskRepository) Initialize(ctx context.Context) error {
-	const query = `
-		CREATE TABLE IF NOT EXISTS tasks (
-			id SERIAL PRIMARY KEY,
-			title TEXT NOT NULL,
-			completed BOOLEAN NOT NULL DEFAULT FALSE,
-			assignee TEXT NOT NULL DEFAULT ''
-		)`
-	if _, err := r.db.ExecContext(ctx, query); err != nil {
-		return fmt.Errorf("create tasks table: %w", err)
-	}
-
-	return nil
 }
 
 func (r *TaskRepository) Create(task *dao.Task) error {

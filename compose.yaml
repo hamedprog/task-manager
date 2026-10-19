@@ -77,5 +77,27 @@ services:
       timeout: 5s
       retries: 5
 
+  postgres-migrate:
+    command:
+      - psql
+      - --host=postgres
+      - --port=5432
+      - --username=taskmanager
+      - --dbname=taskmanager
+      - --file=/init_schema.up.sql
+      - --set=ON_ERROR_STOP=1
+    container_name: postgres-migrate
+    depends_on:
+      postgres:
+        condition: service_healthy
+    image: postgres:17
+    labels:
+      namespace: postgres-migrate
+    restart: "no"
+    volumes:
+      - ./db/init_schema.up.sql:/init_schema.up.sql:ro
+    environment:
+      PGPASSWORD: "taskmanager"
+
 volumes:
   postgres_data:

@@ -1,7 +1,6 @@
 package repository
 
 import (
-	"context"
 	"database/sql"
 	"errors"
 	"regexp"
@@ -24,42 +23,6 @@ func newMockTaskRepository(t *testing.T) (*TaskRepository, sqlmock.Sqlmock) {
 	})
 
 	return NewTaskRepository(db), sqlMock
-}
-
-func TestTaskRepositoryInitialize(t *testing.T) {
-	const query = `
-		CREATE TABLE IF NOT EXISTS tasks (
-			id SERIAL PRIMARY KEY,
-			title TEXT NOT NULL,
-			completed BOOLEAN NOT NULL DEFAULT FALSE,
-			assignee TEXT NOT NULL DEFAULT ''
-		)`
-
-	t.Run("success", func(t *testing.T) {
-		taskRepository, sqlMock := newMockTaskRepository(t)
-		sqlMock.ExpectExec(regexp.QuoteMeta(query)).WillReturnResult(sqlmock.NewResult(0, 0))
-
-		if err := taskRepository.Initialize(context.Background()); err != nil {
-			t.Fatalf("Initialize() error = %v", err)
-		}
-		if err := sqlMock.ExpectationsWereMet(); err != nil {
-			t.Errorf("unmet SQL expectations: %v", err)
-		}
-	})
-
-	t.Run("database error", func(t *testing.T) {
-		taskRepository, sqlMock := newMockTaskRepository(t)
-		dbErr := errors.New("database unavailable")
-		sqlMock.ExpectExec(regexp.QuoteMeta(query)).WillReturnError(dbErr)
-
-		err := taskRepository.Initialize(context.Background())
-		if !errors.Is(err, dbErr) {
-			t.Errorf("Initialize() error = %v, want wrapped %v", err, dbErr)
-		}
-		if err := sqlMock.ExpectationsWereMet(); err != nil {
-			t.Errorf("unmet SQL expectations: %v", err)
-		}
-	})
 }
 
 func TestTaskRepositoryCreate(t *testing.T) {
