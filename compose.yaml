@@ -3,11 +3,35 @@ services:
     build: .
     environment:
       DATABASE_URL: postgres://taskmanager:taskmanager@postgres:5432/taskmanager?sslmode=disable
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
     ports:
       - "9090:9090"
     depends_on:
       postgres:
         condition: service_healthy
+      jaeger:
+        condition: service_healthy
+
+  jaeger:
+    container_name: jeager
+    healthcheck:
+      interval: 10s
+      retries: 5
+      start_period: 10s
+      test:
+        [
+          "CMD-SHELL",
+          "wget --no-verbose --tries=1 --spider http://jaeger:14269 || exit 1",
+        ]
+      timeout: 5s
+    image: jaegertracing/all-in-one:1.57.0
+    labels:
+      namespace: jaeger
+    restart: "no"
+    ports:
+      - "16686:16686"
+      - "4318:4318"
 
   swagger:
     container_name: swagger-ui
