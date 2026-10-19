@@ -13,7 +13,8 @@ import (
 
 // CreateTaskRequest defines model for CreateTaskRequest.
 type CreateTaskRequest struct {
-	Title string `json:"title"`
+	Assignee *string `json:"assignee,omitempty"`
+	Title    string  `json:"title"`
 }
 
 // Error defines model for Error.
@@ -23,6 +24,7 @@ type Error struct {
 
 // Task defines model for Task.
 type Task struct {
+	Assignee  string `json:"assignee"`
 	Completed bool   `json:"completed"`
 	Id        int32  `json:"id"`
 	Title     string `json:"title"`
@@ -30,6 +32,7 @@ type Task struct {
 
 // UpdateTaskRequest defines model for UpdateTaskRequest.
 type UpdateTaskRequest struct {
+	Assignee  *string `json:"assignee,omitempty"`
 	Completed *bool   `json:"completed,omitempty"`
 	Title     *string `json:"title,omitempty"`
 }

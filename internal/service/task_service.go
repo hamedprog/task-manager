@@ -35,7 +35,11 @@ func (s *TaskService) Create(boTask bo.Task) (*bo.Task, error) {
 		return nil, errors.New("title cannot be empty")
 	}
 
-	daoTask := &dao.Task{Title: title}
+	assignee := ""
+	if boTask.Assignee != nil {
+		assignee = *boTask.Assignee
+	}
+	daoTask := &dao.Task{Title: title, Assignee: assignee}
 	if err := s.repository.Create(daoTask); err != nil {
 		return nil, err
 	}
@@ -84,6 +88,10 @@ func (s *TaskService) Update(task bo.Task) (*bo.Task, error) {
 		daoTask.Completed = *task.Completed
 	}
 
+	if task.Assignee != nil {
+		daoTask.Assignee = *task.Assignee
+	}
+
 	if err := s.repository.Update(daoTask); err != nil {
 		return nil, err
 	}
@@ -98,10 +106,12 @@ func (s *TaskService) Delete(id int) error {
 func toBusinessTask(task *dao.Task) *bo.Task {
 	title := task.Title
 	completed := task.Completed
+	assignee := task.Assignee
 
 	return &bo.Task{
 		ID:        task.ID,
 		Title:     &title,
 		Completed: &completed,
+		Assignee:  &assignee,
 	}
 }

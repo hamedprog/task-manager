@@ -155,6 +155,7 @@ components:
         - id
         - title
         - completed
+        - assignee
       properties:
         id:
           type: integer
@@ -163,12 +164,16 @@ components:
           type: string
         completed:
           type: boolean
+        assignee:
+          type: string
     CreateTaskRequest:
       type: object
       required:
         - title
       properties:
         title:
+          type: string
+        assignee:
           type: string
     UpdateTaskRequest:
       type: object
@@ -178,6 +183,8 @@ components:
           type: string
         completed:
           type: boolean
+        assignee:
+          type: string
     Error:
       type: object
       required:

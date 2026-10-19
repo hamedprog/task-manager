@@ -31,7 +31,8 @@ func TestTaskRepositoryInitialize(t *testing.T) {
 		CREATE TABLE IF NOT EXISTS tasks (
 			id SERIAL PRIMARY KEY,
 			title TEXT NOT NULL,
-			completed BOOLEAN NOT NULL DEFAULT FALSE
+			completed BOOLEAN NOT NULL DEFAULT FALSE,
+			assignee TEXT NOT NULL DEFAULT ''
 		)`
 
 	t.Run("success", func(t *testing.T) {
@@ -62,13 +63,13 @@ func TestTaskRepositoryInitialize(t *testing.T) {
 }
 
 func TestTaskRepositoryCreate(t *testing.T) {
-	const query = `INSERT INTO tasks (title, completed) VALUES ($1, $2) RETURNING id`
+	const query = `INSERT INTO tasks (title, completed, assignee) VALUES ($1, $2, $3) RETURNING id`
 
 	t.Run("success assigns ID", func(t *testing.T) {
 		taskRepository, sqlMock := newMockTaskRepository(t)
-		daoTask := &dao.Task{Title: "Write tests", Completed: true}
+		daoTask := &dao.Task{Title: "Write tests", Completed: true, Assignee: "Alex"}
 		sqlMock.ExpectQuery(regexp.QuoteMeta(query)).
-			WithArgs(daoTask.Title, daoTask.Completed).
+			WithArgs(daoTask.Title, daoTask.Completed, daoTask.Assignee).
 			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(42))
 
 		if err := taskRepository.Create(daoTask); err != nil {
@@ -87,7 +88,7 @@ func TestTaskRepositoryCreate(t *testing.T) {
 		daoTask := &dao.Task{Title: "Write tests"}
 		dbErr := errors.New("insert failed")
 		sqlMock.ExpectQuery(regexp.QuoteMeta(query)).
-			WithArgs(daoTask.Title, daoTask.Completed).
+			WithArgs(daoTask.Title, daoTask.Completed, daoTask.Assignee).
 			WillReturnError(dbErr)
 
 		err := taskRepository.Create(daoTask)
@@ -101,15 +102,15 @@ func TestTaskRepositoryCreate(t *testing.T) {
 }
 
 func TestTaskRepositoryGetByID(t *testing.T) {
-	const query = `SELECT id, title, completed FROM tasks WHERE id = $1`
+	const query = `SELECT id, title, completed, assignee FROM tasks WHERE id = $1`
 
 	t.Run("success", func(t *testing.T) {
 		taskRepository, sqlMock := newMockTaskRepository(t)
-		want := &dao.Task{ID: 12, Title: "Read docs", Completed: true}
+		want := &dao.Task{ID: 12, Title: "Read docs", Completed: true, Assignee: "Alex"}
 		sqlMock.ExpectQuery(regexp.QuoteMeta(query)).
 			WithArgs(want.ID).
-			WillReturnRows(sqlmock.NewRows([]string{"id", "title", "completed"}).
-				AddRow(want.ID, want.Title, want.Completed))
+			WillReturnRows(sqlmock.NewRows([]string{"id", "title", "completed", "assignee"}).
+				AddRow(want.ID, want.Title, want.Completed, want.Assignee))
 
 		got, err := taskRepository.GetByID(want.ID)
 		if err != nil {
@@ -159,22 +160,22 @@ func TestTaskRepositoryGetByID(t *testing.T) {
 }
 
 func TestTaskRepositoryList(t *testing.T) {
-	const query = `SELECT id, title, completed FROM tasks ORDER BY id`
+	const query = `SELECT id, title, completed, assignee FROM tasks ORDER BY id`
 
 	t.Run("success", func(t *testing.T) {
 		taskRepository, sqlMock := newMockTaskRepository(t)
 		sqlMock.ExpectQuery(regexp.QuoteMeta(query)).
-			WillReturnRows(sqlmock.NewRows([]string{"id", "title", "completed"}).
-				AddRow(1, "First", false).
-				AddRow(2, "Second", true))
+			WillReturnRows(sqlmock.NewRows([]string{"id", "title", "completed", "assignee"}).
+				AddRow(1, "First", false, "Alex").
+				AddRow(2, "Second", true, "Sam"))
 
 		got, err := taskRepository.List()
 		if err != nil {
 			t.Fatalf("List() error = %v", err)
 		}
 		want := []dao.Task{
-			{ID: 1, Title: "First"},
-			{ID: 2, Title: "Second", Completed: true},
+			{ID: 1, Title: "First", Assignee: "Alex"},
+			{ID: 2, Title: "Second", Completed: true, Assignee: "Sam"},
 		}
 		if len(got) != len(want) {
 			t.Fatalf("List() returned %d tasks, want %d", len(got), len(want))
@@ -192,7 +193,7 @@ func TestTaskRepositoryList(t *testing.T) {
 	t.Run("empty result is non-nil", func(t *testing.T) {
 		repository, sqlMock := newMockTaskRepository(t)
 		sqlMock.ExpectQuery(regexp.QuoteMeta(query)).
-			WillReturnRows(sqlmock.NewRows([]string{"id", "title", "completed"}))
+			WillReturnRows(sqlmock.NewRows([]string{"id", "title", "completed", "assignee"}))
 
 		got, err := repository.List()
 		if err != nil {
@@ -223,8 +224,8 @@ func TestTaskRepositoryList(t *testing.T) {
 	t.Run("scan error", func(t *testing.T) {
 		repository, sqlMock := newMockTaskRepository(t)
 		sqlMock.ExpectQuery(regexp.QuoteMeta(query)).
-			WillReturnRows(sqlmock.NewRows([]string{"id", "title", "completed"}).
-				AddRow("not an integer", "Task", false))
+			WillReturnRows(sqlmock.NewRows([]string{"id", "title", "completed", "assignee"}).
+				AddRow("not an integer", "Task", false, "Alex"))
 
 		_, err := repository.List()
 		if err == nil {
@@ -238,8 +239,8 @@ func TestTaskRepositoryList(t *testing.T) {
 	t.Run("iteration error", func(t *testing.T) {
 		repository, sqlMock := newMockTaskRepository(t)
 		dbErr := errors.New("row iteration failed")
-		rows := sqlmock.NewRows([]string{"id", "title", "completed"}).
-			AddRow(1, "Task", false).
+		rows := sqlmock.NewRows([]string{"id", "title", "completed", "assignee"}).
+			AddRow(1, "Task", false, "Alex").
 			RowError(0, dbErr)
 		sqlMock.ExpectQuery(regexp.QuoteMeta(query)).WillReturnRows(rows)
 
@@ -254,13 +255,13 @@ func TestTaskRepositoryList(t *testing.T) {
 }
 
 func TestTaskRepositoryUpdate(t *testing.T) {
-	const query = `UPDATE tasks SET title = $1, completed = $2 WHERE id = $3`
+	const query = `UPDATE tasks SET title = $1, completed = $2, assignee = $3 WHERE id = $4`
 
 	t.Run("success", func(t *testing.T) {
 		taskRepository, sqlMock := newMockTaskRepository(t)
-		daoTask := &dao.Task{ID: 7, Title: "Updated task", Completed: true}
+		daoTask := &dao.Task{ID: 7, Title: "Updated task", Completed: true, Assignee: "Alex"}
 		sqlMock.ExpectExec(regexp.QuoteMeta(query)).
-			WithArgs(daoTask.Title, daoTask.Completed, daoTask.ID).
+			WithArgs(daoTask.Title, daoTask.Completed, daoTask.Assignee, daoTask.ID).
 			WillReturnResult(sqlmock.NewResult(0, 1))
 
 		if err := taskRepository.Update(daoTask); err != nil {
@@ -275,7 +276,7 @@ func TestTaskRepositoryUpdate(t *testing.T) {
 		taskRepository, sqlMock := newMockTaskRepository(t)
 		daoTask := &dao.Task{ID: 7, Title: "Missing task"}
 		sqlMock.ExpectExec(regexp.QuoteMeta(query)).
-			WithArgs(daoTask.Title, daoTask.Completed, daoTask.ID).
+			WithArgs(daoTask.Title, daoTask.Completed, daoTask.Assignee, daoTask.ID).
 			WillReturnResult(sqlmock.NewResult(0, 0))
 
 		if err := taskRepository.Update(daoTask); !errors.Is(err, ErrTaskNotFound) {
@@ -291,7 +292,7 @@ func TestTaskRepositoryUpdate(t *testing.T) {
 		task := &dao.Task{ID: 7, Title: "Updated task"}
 		dbErr := errors.New("update failed")
 		sqlMock.ExpectExec(regexp.QuoteMeta(query)).
-			WithArgs(task.Title, task.Completed, task.ID).
+			WithArgs(task.Title, task.Completed, task.Assignee, task.ID).
 			WillReturnError(dbErr)
 
 		err := taskRepository.Update(task)
@@ -308,7 +309,7 @@ func TestTaskRepositoryUpdate(t *testing.T) {
 		task := &dao.Task{ID: 7, Title: "Updated task"}
 		resultErr := errors.New("affected rows unavailable")
 		sqlMock.ExpectExec(regexp.QuoteMeta(query)).
-			WithArgs(task.Title, task.Completed, task.ID).
+			WithArgs(task.Title, task.Completed, task.Assignee, task.ID).
 			WillReturnResult(sqlmock.NewErrorResult(resultErr))
 
 		err := taskRepository.Update(task)
