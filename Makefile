@@ -14,6 +14,7 @@ generate-api: ## Generate API
 .PHONY: generate-mocks
 generate-mocks: ## Generate Mocks
 	go tool go.uber.org/mock/mockgen -source=internal/service/task_service.go -destination=internal/service/mock_task_repository_test.go -package=service
+	go tool go.uber.org/mock/mockgen -source=internal/handler/task_handler.go -destination=internal/handler/mock_task_service_test.go -package=handler
 
 .PHONY: help
 help: ## Help
