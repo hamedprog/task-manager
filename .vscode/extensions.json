@@ -7,7 +7,6 @@
     "esbenp.prettier-vscode",
     "golang.go",
     "ms-azuretools.vscode-docker",
-    "quicktype.quicktype",
     "redhat.vscode-yaml",
     "streetsidesoftware.code-spell-checker",
   ]
