@@ -52,8 +52,6 @@ services:
     ports:
       - "9091:9090"
     restart: "no"
-    depends_on:
-      - otelcol
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus

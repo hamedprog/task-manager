@@ -6,3 +6,8 @@ type Task struct {
 	Completed bool
 	Assignee  string
 }
+
+type TaskFilter struct {
+	Assignee  *string
+	Completed *bool
+}

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 
 	"task-manager/internal/object/dao"
 )
@@ -40,9 +41,24 @@ func (r *TaskRepository) GetByID(id int) (*dao.Task, error) {
 	return task, nil
 }
 
-func (r *TaskRepository) List() ([]dao.Task, error) {
-	const query = `SELECT id, title, completed, assignee FROM tasks ORDER BY id`
-	rows, err := r.db.Query(query)
+func (r *TaskRepository) List(filter dao.TaskFilter) ([]dao.Task, error) {
+	query := `SELECT id, title, completed, assignee FROM tasks`
+	var conditions []string
+	var args []any
+	if filter.Assignee != nil {
+		args = append(args, *filter.Assignee)
+		conditions = append(conditions, fmt.Sprintf("assignee = $%d", len(args)))
+	}
+	if filter.Completed != nil {
+		args = append(args, *filter.Completed)
+		conditions = append(conditions, fmt.Sprintf("completed = $%d", len(args)))
+	}
+	if len(conditions) != 0 {
+		query += " WHERE " + strings.Join(conditions, " AND ")
+	}
+	query += " ORDER BY id"
+
+	rows, err := r.db.Query(query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list tasks: %w", err)
 	}

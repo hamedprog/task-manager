@@ -10,6 +10,7 @@ import (
 
 	"task-manager/internal/api"
 	"task-manager/internal/object/bo"
+	"task-manager/internal/object/dao"
 
 	"github.com/gin-gonic/gin"
 	"go.opentelemetry.io/otel/metric/noop"
@@ -136,13 +137,18 @@ func TestTaskHandlerCreateTask(t *testing.T) {
 func TestTaskHandlerListTasks(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		service, handler := newMockTaskHandler(t)
-		service.EXPECT().List().Return([]bo.Task{
+		completed := false
+		service.EXPECT().List(dao.TaskFilter{Assignee: stringPointer("Alex"), Completed: &completed}).Return([]bo.Task{
 			{ID: 1, Title: stringPointer("First"), Completed: boolPointer(false), Assignee: stringPointer("Alex")},
 			{ID: 2, Title: stringPointer("Second"), Completed: boolPointer(true), Assignee: stringPointer("Sam")},
 		}, nil)
 		context, recorder := newTestContext(http.MethodGet, "")
+		context.Request.URL.RawQuery = "assignee=Alex&completed=false"
 
-		handler.ListTasks(context)
+		handler.ListTasks(context, api.ListTasksParams{
+			Assignee:  stringPointer("Alex"),
+			Completed: &completed,
+		})
 
 		if recorder.Code != http.StatusOK {
 			t.Fatalf("status = %d, want %d", recorder.Code, http.StatusOK)
@@ -167,13 +173,32 @@ func TestTaskHandlerListTasks(t *testing.T) {
 
 	t.Run("service failure", func(t *testing.T) {
 		service, handler := newMockTaskHandler(t)
-		service.EXPECT().List().Return(nil, errors.New("database unavailable"))
+		service.EXPECT().List(dao.TaskFilter{}).Return(nil, errors.New("database unavailable"))
 		context, recorder := newTestContext(http.MethodGet, "")
 
-		handler.ListTasks(context)
+		handler.ListTasks(context, api.ListTasksParams{})
 
 		if recorder.Code != http.StatusInternalServerError {
 			t.Errorf("status = %d, want %d", recorder.Code, http.StatusInternalServerError)
+		}
+	})
+
+	t.Run("invalid completed filter", func(t *testing.T) {
+		_, handler := newMockTaskHandler(t)
+		router := gin.New()
+		handler.RegisterRoutes(router)
+		recorder := httptest.NewRecorder()
+		router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/tasks?completed=sometimes", nil))
+
+		if recorder.Code != http.StatusBadRequest {
+			t.Errorf("status = %d, want %d", recorder.Code, http.StatusBadRequest)
+		}
+		var got api.Error
+		if err := json.Unmarshal(recorder.Body.Bytes(), &got); err != nil {
+			t.Fatalf("decode response: %v", err)
+		}
+		if got.Error != "invalid task filter" {
+			t.Errorf("error = %q, want invalid task filter", got.Error)
 		}
 	})
 }

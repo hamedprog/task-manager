@@ -52,6 +52,16 @@
         "password": "taskmanager",
         "ssl": false
     },
+    {
+        "name": "TaskManager Local test",
+        "driver": "PostgreSQL",
+        "server": "localhost",
+        "port": 5432,
+        "database": "taskmanager_test",
+        "username": "taskmanager",
+        "password": "taskmanager",
+        "ssl": false
+    },
   ],
   "yaml.customTags": ["!reference sequence"]
 }
