@@ -138,16 +138,23 @@ func TestTaskHandlerListTasks(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		service, handler := newMockTaskHandler(t)
 		completed := false
-		service.EXPECT().List(dao.TaskFilter{Assignee: stringPointer("Alex"), Completed: &completed}).Return([]bo.Task{
+		limit := 5
+		offset := 10
+		service.EXPECT().List(
+			dao.TaskFilter{Assignee: stringPointer("Alex"), Completed: &completed},
+			dao.Cursor{Limit: &limit, Offset: &offset},
+		).Return([]bo.Task{
 			{ID: 1, Title: stringPointer("First"), Completed: boolPointer(false), Assignee: stringPointer("Alex")},
 			{ID: 2, Title: stringPointer("Second"), Completed: boolPointer(true), Assignee: stringPointer("Sam")},
 		}, nil)
 		context, recorder := newTestContext(http.MethodGet, "")
-		context.Request.URL.RawQuery = "assignee=Alex&completed=false"
+		context.Request.URL.RawQuery = "assignee=Alex&completed=false&limit=5&offset=10"
 
 		handler.ListTasks(context, api.ListTasksParams{
 			Assignee:  stringPointer("Alex"),
 			Completed: &completed,
+			Limit:     &limit,
+			Offset:    &offset,
 		})
 
 		if recorder.Code != http.StatusOK {
@@ -173,13 +180,25 @@ func TestTaskHandlerListTasks(t *testing.T) {
 
 	t.Run("service failure", func(t *testing.T) {
 		service, handler := newMockTaskHandler(t)
-		service.EXPECT().List(dao.TaskFilter{}).Return(nil, errors.New("database unavailable"))
+		service.EXPECT().List(dao.TaskFilter{}, dao.Cursor{}).Return(nil, errors.New("database unavailable"))
 		context, recorder := newTestContext(http.MethodGet, "")
 
 		handler.ListTasks(context, api.ListTasksParams{})
 
 		if recorder.Code != http.StatusInternalServerError {
 			t.Errorf("status = %d, want %d", recorder.Code, http.StatusInternalServerError)
+		}
+	})
+
+	t.Run("invalid cursor values", func(t *testing.T) {
+		_, handler := newMockTaskHandler(t)
+		limit := 0
+		context, recorder := newTestContext(http.MethodGet, "")
+
+		handler.ListTasks(context, api.ListTasksParams{Limit: &limit})
+
+		if recorder.Code != http.StatusBadRequest {
+			t.Errorf("status = %d, want %d", recorder.Code, http.StatusBadRequest)
 		}
 	})
 

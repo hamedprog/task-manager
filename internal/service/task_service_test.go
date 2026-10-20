@@ -95,12 +95,12 @@ func TestTaskServiceCreate(t *testing.T) {
 func TestTaskServiceList(t *testing.T) {
 	t.Run("success maps all tasks", func(t *testing.T) {
 		repository, taskService := newMockTaskService(t)
-		repository.EXPECT().List(dao.TaskFilter{}).Return([]dao.Task{
+		repository.EXPECT().List(dao.TaskFilter{}, dao.Cursor{}).Return([]dao.Task{
 			{ID: 1, Title: "First", Assignee: "Alex"},
 			{ID: 2, Title: "Second", Completed: true, Assignee: "Sam"},
 		}, nil)
 
-		got, err := taskService.List(dao.TaskFilter{})
+		got, err := taskService.List(dao.TaskFilter{}, dao.Cursor{})
 		if err != nil {
 			t.Fatalf("List() error = %v", err)
 		}
@@ -128,9 +128,12 @@ func TestTaskServiceList(t *testing.T) {
 		assignee := "Alex"
 		completed := false
 		filter := dao.TaskFilter{Assignee: &assignee, Completed: &completed}
-		repository.EXPECT().List(filter).Return([]dao.Task{}, nil)
+		limit := 5
+		offset := 10
+		cursor := dao.Cursor{Limit: &limit, Offset: &offset}
+		repository.EXPECT().List(filter, cursor).Return([]dao.Task{}, nil)
 
-		got, err := taskService.List(filter)
+		got, err := taskService.List(filter, cursor)
 		if err != nil {
 			t.Fatalf("List() error = %v", err)
 		}
@@ -142,9 +145,9 @@ func TestTaskServiceList(t *testing.T) {
 	t.Run("repository error", func(t *testing.T) {
 		repository, taskService := newMockTaskService(t)
 		repositoryErr := errors.New("query failed")
-		repository.EXPECT().List(dao.TaskFilter{}).Return(nil, repositoryErr)
+		repository.EXPECT().List(dao.TaskFilter{}, dao.Cursor{}).Return(nil, repositoryErr)
 
-		got, err := taskService.List(dao.TaskFilter{})
+		got, err := taskService.List(dao.TaskFilter{}, dao.Cursor{})
 		if !errors.Is(err, repositoryErr) {
 			t.Errorf("List() error = %v, want %v", err, repositoryErr)
 		}

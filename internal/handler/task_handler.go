@@ -14,7 +14,7 @@ import (
 
 type TaskService interface {
 	Create(task bo.Task) (*bo.Task, error)
-	List(filter dao.TaskFilter) ([]bo.Task, error)
+	List(filter dao.TaskFilter, cursor dao.Cursor) ([]bo.Task, error)
 	GetByID(id int) (*bo.Task, error)
 	Update(task bo.Task) (*bo.Task, error)
 	Delete(id int) error
@@ -74,8 +74,18 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 }
 
 func (h *TaskHandler) ListTasks(c *gin.Context, params api.ListTasksParams) {
+	if params.Offset != nil && *params.Offset < 0 {
+		c.JSON(http.StatusBadRequest, api.Error{Error: "offset must be non-negative"})
+		return
+	}
+	if params.Limit != nil && *params.Limit < 1 {
+		c.JSON(http.StatusBadRequest, api.Error{Error: "limit must be positive"})
+		return
+	}
+
 	filter := dao.TaskFilter{Assignee: params.Assignee, Completed: params.Completed}
-	boTasks, err := h.service.List(filter)
+	cursor := dao.Cursor{Offset: params.Offset, Limit: params.Limit}
+	boTasks, err := h.service.List(filter, cursor)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, api.Error{Error: "failed to list tasks"})
 		return

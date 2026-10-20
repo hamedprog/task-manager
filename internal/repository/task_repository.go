@@ -41,7 +41,7 @@ func (r *TaskRepository) GetByID(id int) (*dao.Task, error) {
 	return task, nil
 }
 
-func (r *TaskRepository) List(filter dao.TaskFilter) ([]dao.Task, error) {
+func (r *TaskRepository) List(filter dao.TaskFilter, cursor dao.Cursor) ([]dao.Task, error) {
 	query := `SELECT id, title, completed, assignee FROM tasks`
 	var conditions []string
 	var args []any
@@ -57,6 +57,14 @@ func (r *TaskRepository) List(filter dao.TaskFilter) ([]dao.Task, error) {
 		query += " WHERE " + strings.Join(conditions, " AND ")
 	}
 	query += " ORDER BY id"
+	if cursor.Limit != nil {
+		args = append(args, *cursor.Limit)
+		query += fmt.Sprintf(" LIMIT $%d", len(args))
+	}
+	if cursor.Offset != nil {
+		args = append(args, *cursor.Offset)
+		query += fmt.Sprintf(" OFFSET $%d", len(args))
+	}
 
 	rows, err := r.db.Query(query, args...)
 	if err != nil {
