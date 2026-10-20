@@ -17,6 +17,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"go.opentelemetry.io/otel/metric/noop"
 )
 
 func TestTaskAPIIntegration(t *testing.T) {
@@ -46,7 +47,11 @@ func TestTaskAPIIntegration(t *testing.T) {
 	})
 
 	router := gin.New()
-	NewTaskHandler(service.NewTaskService(repo)).RegisterRoutes(router)
+	taskCount, err := noop.NewMeterProvider().Meter("test").Int64Counter("tasks_count")
+	if err != nil {
+		t.Fatalf("create task count counter: %v", err)
+	}
+	NewTaskHandler(service.NewTaskService(repo), taskCount).RegisterRoutes(router)
 
 	createResp := doRequest(t, router, http.MethodPost, "/tasks", `{"title":"Write integration test","assignee":"Alex"}`)
 	if createResp.Code != http.StatusCreated {

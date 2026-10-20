@@ -14,6 +14,8 @@ your machine instead, start PostgreSQL:
 Swagger UI is available at `http://localhost:8080` and loads its API definition
 from `api/openapi.yaml`.
 Jaeger is available at `http://localhost:16686` for viewing collected traces.
+Prometheus is available at `http://localhost:9091`. It scrapes metrics exposed
+by the OpenTelemetry Collector, which also forwards traces to Jaeger.
 
 ```sh
 docker compose up -d postgres
@@ -30,10 +32,30 @@ The API uses
 by default when run locally. Set `DATABASE_URL` to override it. The `tasks`
 table is created at API startup if it does not already exist.
 
-Incoming HTTP requests are traced with OpenTelemetry and exported using OTLP
-over HTTP. Docker Compose sends traces to Jaeger. When running the API outside
-Compose, set `OTEL_EXPORTER_OTLP_ENDPOINT` to your collector's OTLP/HTTP base
-URL (for example, `http://localhost:4318`).
+Incoming HTTP requests are traced and measured with OpenTelemetry and exported
+over OTLP/HTTP to the Collector. Prometheus receives the total request counter,
+request duration histogram, and cumulative number of tasks returned by task-list
+requests through the Collector.
+When running the API outside Compose, start the Collector and set
+`OTEL_EXPORTER_OTLP_ENDPOINT` to its OTLP/HTTP base URL (for example,
+`http://localhost:4318`).
+
+Example Prometheus queries:
+
+```promql
+sum(rate(task_manager_http_requests_total[5m]))
+```
+
+```promql
+histogram_quantile(
+  0.95,
+  sum by (le) (rate(task_manager_http_request_duration_seconds_bucket[5m]))
+)
+```
+
+```promql
+task_manager_tasks_count_total
+```
 
 ## API definition and code generation
 

@@ -12,6 +12,7 @@ import (
 	"task-manager/internal/object/bo"
 
 	"github.com/gin-gonic/gin"
+	"go.opentelemetry.io/otel/metric/noop"
 	"go.uber.org/mock/gomock"
 )
 
@@ -19,7 +20,11 @@ func newMockTaskHandler(t *testing.T) (*MockTaskService, *TaskHandler) {
 	t.Helper()
 
 	service := NewMockTaskService(gomock.NewController(t))
-	return service, NewTaskHandler(service)
+	taskCount, err := noop.NewMeterProvider().Meter("test").Int64Counter("tasks_count")
+	if err != nil {
+		t.Fatalf("create task count counter: %v", err)
+	}
+	return service, NewTaskHandler(service, taskCount)
 }
 
 func stringPointer(value string) *string {
