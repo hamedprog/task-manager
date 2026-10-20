@@ -1,5 +1,6 @@
 .DEFAULT_GOAL := help
 
+K6_TEST_BASE_URL := http://localhost:9090
 MIGRATE_DB_NAME := taskmanager
 MIGRATE_DSN := "postgres://taskmanager:taskmanager@localhost:5432/$(MIGRATE_DB_NAME)?sslmode=disable"
 MIGRATE_VER := development
@@ -37,3 +38,7 @@ migrate-up: ## Migrate Up
 .PHONY: migrate-down
 migrate-down: ## Migrate Down
 	migrate -database=$(MIGRATE_DSN) -source=$(MIGRATE_SOURCE) -verbose down 1
+
+.PHONY: k6-test
+k6-test: ## Run k6 load test
+	k6 run --env BASE_URL="$(K6_TEST_BASE_URL)" ./test/k6/loadtest.js
