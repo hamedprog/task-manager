@@ -19,13 +19,13 @@ Prometheus is available at `http://localhost:9091`. It scrapes metrics exposed
 by the OpenTelemetry Collector, which also forwards traces to Jaeger.
 
 ```sh
-docker compose up -d postgres redis
+docker compose up -d postgres redis pyroscope
 ```
 
 Then run:
 
 ```sh
-go run ./cmd/api
+PYROSCOPE_SERVER_ADDRESS=http://localhost:4040 go run ./cmd/api
 ```
 
 The API uses
@@ -35,6 +35,9 @@ table is created at API startup if it does not already exist.
 Set `REDIS_ADDR` to override the Redis address; it defaults to
 `localhost:6379`. Task list responses are cached for 30 seconds, with the cache
 version incremented after successful task creates, updates, and deletes.
+Pyroscope is available at `http://localhost:4040` when running the full Compose
+stack. Set `PYROSCOPE_SERVER_ADDRESS` to enable continuous CPU and heap
+profiling; profiling is disabled when the variable is unset.
 
 Incoming HTTP requests are traced and measured with OpenTelemetry and exported
 over OTLP/HTTP to the Collector. Prometheus receives the total request counter,

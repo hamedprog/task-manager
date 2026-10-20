@@ -5,6 +5,7 @@ services:
       DATABASE_URL: postgres://taskmanager:taskmanager@postgres:5432/taskmanager?sslmode=disable
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otelcol:4318
       OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+      PYROSCOPE_SERVER_ADDRESS: http://pyroscope:4040
       REDIS_ADDR: redis:6379
     ports:
       - "9090:9090"
@@ -15,6 +16,8 @@ services:
         condition: service_healthy
       otelcol:
         condition: service_started
+      pyroscope:
+        condition: service_healthy
 
   redis:
     command:
@@ -30,6 +33,21 @@ services:
       namespace: redis
     ports:
       - "6379:6379"
+    restart: "no"
+
+  pyroscope:
+    container_name: pyroscope
+    healthcheck:
+      test: ["CMD", "profilecli", "ready", "--url", "http://localhost:4040"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    image: grafana/pyroscope:1.14.0
+    labels:
+      namespace: pyroscope
+    ports:
+      - "4040:4040"
     restart: "no"
 
   otelcol:
@@ -69,7 +87,7 @@ services:
     labels:
       namespace: prometheus
     ports:
-      - "9091:9090"
+      - "9091:9092"
     restart: "no"
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
@@ -102,14 +120,14 @@ services:
       interval: 10s
       retries: 5
       start_period: 10s
-      test:
+      test: 
         [
           "CMD",
-          "/wget",
+          "wget",
           "--no-verbose",
           "--spider",
           "--tries=1",
-          "http://swagger-ui:7007/swagger",
+          "http://swagger-ui:8080/"
         ]
       timeout: 5s
     image: swaggerapi/swagger-ui
