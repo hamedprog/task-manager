@@ -7,6 +7,7 @@ import (
 	"task-manager/internal/object/bo"
 
 	"github.com/gin-gonic/gin"
+	"go.opentelemetry.io/otel/metric"
 )
 
 type TaskService interface {
@@ -18,11 +19,12 @@ type TaskService interface {
 }
 
 type TaskHandler struct {
-	service TaskService
+	service   TaskService
+	taskCount metric.Int64Counter
 }
 
-func NewTaskHandler(service TaskService) *TaskHandler {
-	return &TaskHandler{service: service}
+func NewTaskHandler(service TaskService, taskCount metric.Int64Counter) *TaskHandler {
+	return &TaskHandler{service: service, taskCount: taskCount}
 }
 
 func (h *TaskHandler) RegisterRoutes(router gin.IRouter) {
@@ -71,6 +73,8 @@ func (h *TaskHandler) ListTasks(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, api.Error{Error: "failed to list tasks"})
 		return
 	}
+
+	h.taskCount.Add(c.Request.Context(), int64(len(boTasks)))
 
 	apiTasks := make([]api.Task, 0, len(boTasks))
 	for _, task := range boTasks {

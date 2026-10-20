@@ -58,9 +58,23 @@ func run() (runErr error) {
 
 	taskRepository := repository.NewTaskRepository(db)
 	taskService := service.NewTaskService(taskRepository)
-	taskHandler := handler.NewTaskHandler(taskService)
+	httpMetrics, shutdownMetrics, err := telemetry.InitMetrics(context.Background(), "task-manager")
+	if err != nil {
+		return fmt.Errorf("initialize metrics: %w", err)
+	}
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := shutdownMetrics(ctx); err != nil {
+			runErr = errors.Join(runErr, fmt.Errorf("shutdown metrics: %w", err))
+		}
+	}()
+
+	taskHandler := handler.NewTaskHandler(taskService, httpMetrics.TaskCount)
+
 	router := gin.Default()
 	router.Use(cors.Default())
+	router.Use(httpMetrics.Middleware())
 	router.Use(otelgin.Middleware("task-manager"))
 	taskHandler.RegisterRoutes(router)
 
