@@ -14,8 +14,8 @@ import (
 func newMockTaskService(t *testing.T) (*MockTaskRepository, *TaskService) {
 	t.Helper()
 
-	repository := NewMockTaskRepository(gomock.NewController(t))
-	return repository, NewTaskService(repository, nil)
+	mockTaskRepository := NewMockTaskRepository(gomock.NewController(t))
+	return mockTaskRepository, NewTaskService(mockTaskRepository, nil)
 }
 
 func stringPointer(value string) *string {
@@ -28,17 +28,17 @@ func boolPointer(value bool) *bool {
 
 func TestTaskServiceCreate(t *testing.T) {
 	t.Run("success trims title and maps task", func(t *testing.T) {
-		repository, taskService := newMockTaskService(t)
-		repository.EXPECT().
+		mockTaskRepository, taskService := newMockTaskService(t)
+		mockTaskRepository.EXPECT().
 			Create(gomock.Any()).
-			DoAndReturn(func(task *dao.Task) error {
-				if task.Title != "Write tests" {
-					t.Errorf("Create() received title %q, want %q", task.Title, "Write tests")
+			DoAndReturn(func(daoTask *dao.Task) error {
+				if daoTask.Title != "Write tests" {
+					t.Errorf("Create() received title %q, want %q", daoTask.Title, "Write tests")
 				}
-				if task.Assignee != "Alex" {
-					t.Errorf("Create() received assignee %q, want %q", task.Assignee, "Alex")
+				if daoTask.Assignee != "Alex" {
+					t.Errorf("Create() received assignee %q, want %q", daoTask.Assignee, "Alex")
 				}
-				task.ID = 1
+				daoTask.ID = 1
 				return nil
 			})
 
@@ -79,9 +79,9 @@ func TestTaskServiceCreate(t *testing.T) {
 	})
 
 	t.Run("repository error", func(t *testing.T) {
-		repository, taskService := newMockTaskService(t)
+		mockTaskRepository, taskService := newMockTaskService(t)
 		repositoryErr := errors.New("insert failed")
-		repository.EXPECT().Create(gomock.Any()).Return(repositoryErr)
+		mockTaskRepository.EXPECT().Create(gomock.Any()).Return(repositoryErr)
 
 		got, err := taskService.Create(bo.Task{Title: stringPointer("Task")})
 		if !errors.Is(err, repositoryErr) {
@@ -95,8 +95,8 @@ func TestTaskServiceCreate(t *testing.T) {
 
 func TestTaskServiceList(t *testing.T) {
 	t.Run("success maps all tasks", func(t *testing.T) {
-		repository, taskService := newMockTaskService(t)
-		repository.EXPECT().List(dao.TaskFilter{}, dao.Cursor{}).Return([]dao.Task{
+		mockTaskRepository, taskService := newMockTaskService(t)
+		mockTaskRepository.EXPECT().List(dao.TaskFilter{}, dao.Cursor{}).Return([]dao.Task{
 			{ID: 1, Title: "First", Assignee: "Alex"},
 			{ID: 2, Title: "Second", Completed: true, Assignee: "Sam"},
 		}, nil)
@@ -125,16 +125,16 @@ func TestTaskServiceList(t *testing.T) {
 	})
 
 	t.Run("passes filters to repository", func(t *testing.T) {
-		repository, taskService := newMockTaskService(t)
+		mockTaskRepository, taskService := newMockTaskService(t)
 		assignee := "Alex"
 		completed := false
-		filter := dao.TaskFilter{Assignee: &assignee, Completed: &completed}
+		daoTaskFilter := dao.TaskFilter{Assignee: &assignee, Completed: &completed}
 		limit := 5
 		offset := 10
-		cursor := dao.Cursor{Limit: &limit, Offset: &offset}
-		repository.EXPECT().List(filter, cursor).Return([]dao.Task{}, nil)
+		daoCursor := dao.Cursor{Limit: &limit, Offset: &offset}
+		mockTaskRepository.EXPECT().List(daoTaskFilter, daoCursor).Return([]dao.Task{}, nil)
 
-		got, err := taskService.List(filter, cursor)
+		got, err := taskService.List(daoTaskFilter, daoCursor)
 		if err != nil {
 			t.Fatalf("List() error = %v", err)
 		}
@@ -144,9 +144,9 @@ func TestTaskServiceList(t *testing.T) {
 	})
 
 	t.Run("repository error", func(t *testing.T) {
-		repository, taskService := newMockTaskService(t)
+		mockTaskRepository, taskService := newMockTaskService(t)
 		repositoryErr := errors.New("query failed")
-		repository.EXPECT().List(dao.TaskFilter{}, dao.Cursor{}).Return(nil, repositoryErr)
+		mockTaskRepository.EXPECT().List(dao.TaskFilter{}, dao.Cursor{}).Return(nil, repositoryErr)
 
 		got, err := taskService.List(dao.TaskFilter{}, dao.Cursor{})
 		if !errors.Is(err, repositoryErr) {
@@ -160,8 +160,8 @@ func TestTaskServiceList(t *testing.T) {
 
 func TestTaskServiceGetByID(t *testing.T) {
 	t.Run("success maps task", func(t *testing.T) {
-		repository, taskService := newMockTaskService(t)
-		repository.EXPECT().
+		mockTaskRepository, taskService := newMockTaskService(t)
+		mockTaskRepository.EXPECT().
 			GetByID(5).
 			Return(&dao.Task{ID: 5, Title: "Read docs", Completed: true, Assignee: "Alex"}, nil)
 
@@ -179,9 +179,9 @@ func TestTaskServiceGetByID(t *testing.T) {
 	})
 
 	t.Run("repository error", func(t *testing.T) {
-		repository, taskService := newMockTaskService(t)
+		mockTaskRepository, taskService := newMockTaskService(t)
 		repositoryErr := errors.New("query failed")
-		repository.EXPECT().GetByID(5).Return(nil, repositoryErr)
+		mockTaskRepository.EXPECT().GetByID(5).Return(nil, repositoryErr)
 
 		got, err := taskService.GetByID(5)
 		if !errors.Is(err, repositoryErr) {
@@ -195,10 +195,10 @@ func TestTaskServiceGetByID(t *testing.T) {
 
 func TestTaskServiceUpdate(t *testing.T) {
 	t.Run("success trims title and updates completed value", func(t *testing.T) {
-		repository, taskService := newMockTaskService(t)
+		mockTaskRepository, taskService := newMockTaskService(t)
 		daoTask := &dao.Task{ID: 5, Title: "Old title", Assignee: "Alex"}
-		repository.EXPECT().GetByID(5).Return(daoTask, nil)
-		repository.EXPECT().
+		mockTaskRepository.EXPECT().GetByID(5).Return(daoTask, nil)
+		mockTaskRepository.EXPECT().
 			Update(&dao.Task{ID: 5, Title: "New title", Assignee: "Sam"}).
 			Return(nil)
 
@@ -221,10 +221,10 @@ func TestTaskServiceUpdate(t *testing.T) {
 	})
 
 	t.Run("omitted assignee is preserved", func(t *testing.T) {
-		repository, taskService := newMockTaskService(t)
+		mockTaskRepository, taskService := newMockTaskService(t)
 		daoTask := &dao.Task{ID: 5, Title: "Task", Assignee: "Alex"}
-		repository.EXPECT().GetByID(5).Return(daoTask, nil)
-		repository.EXPECT().Update(&dao.Task{ID: 5, Title: "Task", Completed: true, Assignee: "Alex"}).Return(nil)
+		mockTaskRepository.EXPECT().GetByID(5).Return(daoTask, nil)
+		mockTaskRepository.EXPECT().Update(&dao.Task{ID: 5, Title: "Task", Completed: true, Assignee: "Alex"}).Return(nil)
 
 		got, err := taskService.Update(bo.Task{ID: 5, Completed: boolPointer(true)})
 		if err != nil {
@@ -236,10 +236,10 @@ func TestTaskServiceUpdate(t *testing.T) {
 	})
 
 	t.Run("updates completed to true", func(t *testing.T) {
-		repository, taskService := newMockTaskService(t)
+		mockTaskRepository, taskService := newMockTaskService(t)
 		daoTask := &dao.Task{ID: 5, Title: "Task"}
-		repository.EXPECT().GetByID(5).Return(daoTask, nil)
-		repository.EXPECT().
+		mockTaskRepository.EXPECT().GetByID(5).Return(daoTask, nil)
+		mockTaskRepository.EXPECT().
 			Update(&dao.Task{ID: 5, Title: "Task", Completed: true}).
 			Return(nil)
 
@@ -250,8 +250,8 @@ func TestTaskServiceUpdate(t *testing.T) {
 	})
 
 	t.Run("not found", func(t *testing.T) {
-		repository, taskService := newMockTaskService(t)
-		repository.EXPECT().
+		mockTaskRepository, taskService := newMockTaskService(t)
+		mockTaskRepository.EXPECT().
 			GetByID(5).
 			Return(nil, errors.New("database not found"))
 
@@ -265,8 +265,8 @@ func TestTaskServiceUpdate(t *testing.T) {
 	})
 
 	t.Run("blank title is invalid", func(t *testing.T) {
-		repository, taskService := newMockTaskService(t)
-		repository.EXPECT().
+		mockTaskRepository, taskService := newMockTaskService(t)
+		mockTaskRepository.EXPECT().
 			GetByID(5).
 			Return(&dao.Task{ID: 5, Title: "Original"}, nil)
 
@@ -280,12 +280,12 @@ func TestTaskServiceUpdate(t *testing.T) {
 	})
 
 	t.Run("repository update error", func(t *testing.T) {
-		repository, taskService := newMockTaskService(t)
+		mockTaskRepository, taskService := newMockTaskService(t)
 		repositoryErr := errors.New("update failed")
-		repository.EXPECT().
+		mockTaskRepository.EXPECT().
 			GetByID(5).
 			Return(&dao.Task{ID: 5, Title: "Original"}, nil)
-		repository.EXPECT().
+		mockTaskRepository.EXPECT().
 			Update(&dao.Task{ID: 5, Title: "Original", Completed: true}).
 			Return(repositoryErr)
 
@@ -301,8 +301,8 @@ func TestTaskServiceUpdate(t *testing.T) {
 
 func TestTaskServiceDelete(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
-		repository, taskService := newMockTaskService(t)
-		repository.EXPECT().Delete(8).Return(nil)
+		mockTaskRepository, taskService := newMockTaskService(t)
+		mockTaskRepository.EXPECT().Delete(8).Return(nil)
 
 		if err := taskService.Delete(8); err != nil {
 			t.Fatalf("Delete(8) error = %v", err)
@@ -310,9 +310,9 @@ func TestTaskServiceDelete(t *testing.T) {
 	})
 
 	t.Run("repository error", func(t *testing.T) {
-		repository, taskService := newMockTaskService(t)
+		mockTaskRepository, taskService := newMockTaskService(t)
 		repositoryErr := errors.New("delete failed")
-		repository.EXPECT().Delete(8).Return(repositoryErr)
+		mockTaskRepository.EXPECT().Delete(8).Return(repositoryErr)
 
 		err := taskService.Delete(8)
 		if !errors.Is(err, repositoryErr) {
@@ -322,18 +322,18 @@ func TestTaskServiceDelete(t *testing.T) {
 }
 
 func TestTaskServiceListCachesByFilterAndCursor(t *testing.T) {
-	repository := NewMockTaskRepository(gomock.NewController(t))
-	cache := NewMockTaskListCache(gomock.NewController(t))
-	taskService := NewTaskService(repository, cache)
+	mockTaskRepository := NewMockTaskRepository(gomock.NewController(t))
+	mockTaskListCache := NewMockTaskListCache(gomock.NewController(t))
+	taskService := NewTaskService(mockTaskRepository, mockTaskListCache)
 
 	cachedTasks := []byte(`[{"id":1,"title":"Cached task","completed":false,"assignee":""}]`)
-	cache.EXPECT().Version(gomock.Any()).Return(int64(0), nil).Times(2)
-	cache.EXPECT().Get(gomock.Any(), gomock.Any()).Return(nil, false, nil)
-	repository.EXPECT().List(dao.TaskFilter{}, dao.Cursor{}).Return([]dao.Task{
+	mockTaskListCache.EXPECT().Version(gomock.Any()).Return(int64(0), nil).Times(2)
+	mockTaskListCache.EXPECT().Get(gomock.Any(), gomock.Any()).Return(nil, false, nil)
+	mockTaskRepository.EXPECT().List(dao.TaskFilter{}, dao.Cursor{}).Return([]dao.Task{
 		{ID: 1, Title: "Cached task"},
 	}, nil).Times(1)
-	cache.EXPECT().Set(gomock.Any(), gomock.Any(), gomock.Any(), 30*time.Second).Return(nil)
-	cache.EXPECT().Get(gomock.Any(), gomock.Any()).Return(cachedTasks, true, nil)
+	mockTaskListCache.EXPECT().Set(gomock.Any(), gomock.Any(), gomock.Any(), 30*time.Second).Return(nil)
+	mockTaskListCache.EXPECT().Get(gomock.Any(), gomock.Any()).Return(cachedTasks, true, nil)
 
 	for i := 0; i < 2; i++ {
 		tasks, err := taskService.List(dao.TaskFilter{}, dao.Cursor{})
@@ -347,45 +347,45 @@ func TestTaskServiceListCachesByFilterAndCursor(t *testing.T) {
 }
 
 func TestTaskServiceMutationsInvalidateTaskListCache(t *testing.T) {
-	repository := NewMockTaskRepository(gomock.NewController(t))
-	cache := NewMockTaskListCache(gomock.NewController(t))
-	taskService := NewTaskService(repository, cache)
-	cache.EXPECT().Invalidate(gomock.Any()).Return(nil).Times(3)
+	mockTaskRepository := NewMockTaskRepository(gomock.NewController(t))
+	mockTaskListCache := NewMockTaskListCache(gomock.NewController(t))
+	taskService := NewTaskService(mockTaskRepository, mockTaskListCache)
+	mockTaskListCache.EXPECT().Invalidate(gomock.Any()).Return(nil).Times(3)
 
-	repository.EXPECT().Create(gomock.Any()).DoAndReturn(func(task *dao.Task) error {
-		task.ID = 1
+	mockTaskRepository.EXPECT().Create(gomock.Any()).DoAndReturn(func(daoTask *dao.Task) error {
+		daoTask.ID = 1
 		return nil
 	})
 	if _, err := taskService.Create(bo.Task{Title: stringPointer("Created")}); err != nil {
 		t.Fatalf("Create() error = %v", err)
 	}
 
-	repository.EXPECT().GetByID(1).Return(&dao.Task{ID: 1, Title: "Created"}, nil)
-	repository.EXPECT().Update(gomock.Any()).Return(nil)
+	mockTaskRepository.EXPECT().GetByID(1).Return(&dao.Task{ID: 1, Title: "Created"}, nil)
+	mockTaskRepository.EXPECT().Update(gomock.Any()).Return(nil)
 	if _, err := taskService.Update(bo.Task{ID: 1, Title: stringPointer("Updated")}); err != nil {
 		t.Fatalf("Update() error = %v", err)
 	}
 
-	repository.EXPECT().Delete(1).Return(nil)
+	mockTaskRepository.EXPECT().Delete(1).Return(nil)
 	if err := taskService.Delete(1); err != nil {
 		t.Fatalf("Delete() error = %v", err)
 	}
 }
 
 func TestTaskServiceListReadsCachedTasks(t *testing.T) {
-	cache := NewMockTaskListCache(gomock.NewController(t))
-	taskService := NewTaskService(NewMockTaskRepository(gomock.NewController(t)), cache)
-	cache.EXPECT().Version(gomock.Any()).Return(int64(3), nil)
-	cache.EXPECT().Get(gomock.Any(), gomock.Any()).Return(
+	mockTaskListCache := NewMockTaskListCache(gomock.NewController(t))
+	taskService := NewTaskService(NewMockTaskRepository(gomock.NewController(t)), mockTaskListCache)
+	mockTaskListCache.EXPECT().Version(gomock.Any()).Return(int64(3), nil)
+	mockTaskListCache.EXPECT().Get(gomock.Any(), gomock.Any()).Return(
 		[]byte(`[{"id":9,"title":"From cache","completed":true,"assignee":"Alex"}]`), true, nil,
 	)
 
-	tasks, err := taskService.List(dao.TaskFilter{}, dao.Cursor{})
+	boTasks, err := taskService.List(dao.TaskFilter{}, dao.Cursor{})
 	if err != nil {
 		t.Fatalf("List() error = %v", err)
 	}
-	if len(tasks) != 1 || tasks[0].ID != 9 || *tasks[0].Title != "From cache" ||
-		!*tasks[0].Completed || *tasks[0].Assignee != "Alex" {
-		t.Errorf("List() = %+v, want cached task 9", tasks)
+	if len(boTasks) != 1 || boTasks[0].ID != 9 || *boTasks[0].Title != "From cache" ||
+		!*boTasks[0].Completed || *boTasks[0].Assignee != "Alex" {
+		t.Errorf("List() = %+v, want cached task 9", boTasks)
 	}
 }

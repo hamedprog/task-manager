@@ -21,26 +21,26 @@ type HTTPMetrics struct {
 }
 
 func InitMetrics(ctx context.Context, serviceName string) (*HTTPMetrics, func(context.Context) error, error) {
-	exporter, err := otlpmetrichttp.New(ctx)
+	httpExporter, err := otlpmetrichttp.New(ctx)
 	if err != nil {
 		return nil, nil, fmt.Errorf("create OTLP metrics exporter: %w", err)
 	}
 
-	provider := sdkmetric.NewMeterProvider(
-		sdkmetric.WithReader(sdkmetric.NewPeriodicReader(exporter, sdkmetric.WithInterval(10*time.Second))),
+	meterProvider := sdkmetric.NewMeterProvider(
+		sdkmetric.WithReader(sdkmetric.NewPeriodicReader(httpExporter, sdkmetric.WithInterval(10*time.Second))),
 		sdkmetric.WithResource(resource.NewSchemaless(
 			attribute.String("service.name", serviceName),
 		)),
 	)
-	httpMetrics, err := newHTTPMetrics(provider.Meter(serviceName))
+	httpMetrics, err := newHTTPMetrics(meterProvider.Meter(serviceName))
 	if err != nil {
-		if shutdownErr := provider.Shutdown(ctx); shutdownErr != nil {
+		if shutdownErr := meterProvider.Shutdown(ctx); shutdownErr != nil {
 			return nil, nil, fmt.Errorf("create metrics instruments: %w (shutdown provider: %v)", err, shutdownErr)
 		}
 		return nil, nil, fmt.Errorf("create metrics instruments: %w", err)
 	}
 
-	return httpMetrics, provider.Shutdown, nil
+	return httpMetrics, meterProvider.Shutdown, nil
 }
 
 func newHTTPMetrics(meter metric.Meter) (*HTTPMetrics, error) {
@@ -65,15 +65,15 @@ func newHTTPMetrics(meter metric.Meter) (*HTTPMetrics, error) {
 }
 
 func (m *HTTPMetrics) Middleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
+	return func(ginContext *gin.Context) {
 		start := time.Now()
-		c.Next()
+		ginContext.Next()
 
-		route := c.FullPath()
+		route := ginContext.FullPath()
 		if route == "" {
 			route = "unmatched"
 		}
-		method := c.Request.Method
+		method := ginContext.Request.Method
 		switch method {
 		case http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut,
 			http.MethodPatch, http.MethodDelete, http.MethodConnect, http.MethodOptions, http.MethodTrace:
@@ -83,9 +83,9 @@ func (m *HTTPMetrics) Middleware() gin.HandlerFunc {
 		attrs := metric.WithAttributes(
 			attribute.String("http.request.method", method),
 			attribute.String("http.route", route),
-			attribute.Int("http.response.status_code", c.Writer.Status()),
+			attribute.Int("http.response.status_code", ginContext.Writer.Status()),
 		)
-		m.requests.Add(c.Request.Context(), 1, attrs)
-		m.durations.Record(c.Request.Context(), time.Since(start).Seconds(), attrs)
+		m.requests.Add(ginContext.Request.Context(), 1, attrs)
+		m.durations.Record(ginContext.Request.Context(), time.Since(start).Seconds(), attrs)
 	}
 }

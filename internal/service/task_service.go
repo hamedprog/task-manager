@@ -18,10 +18,10 @@ import (
 var ErrTaskNotFound = errors.New("task not found")
 
 type TaskRepository interface {
-	Create(task *dao.Task) error
-	List(filter dao.TaskFilter, cursor dao.Cursor) ([]dao.Task, error)
+	Create(daoTask *dao.Task) error
+	List(daoTaskFilter dao.TaskFilter, daoCursor dao.Cursor) ([]dao.Task, error)
 	GetByID(id int) (*dao.Task, error)
-	Update(task *dao.Task) error
+	Update(daoTask *dao.Task) error
 	Delete(id int) error
 }
 
@@ -33,12 +33,12 @@ type TaskListCache interface {
 }
 
 type TaskService struct {
-	repository TaskRepository
-	cache      TaskListCache
+	taskRepository TaskRepository
+	taskListCache  TaskListCache
 }
 
-func NewTaskService(repository TaskRepository, cache TaskListCache) *TaskService {
-	return &TaskService{repository: repository, cache: cache}
+func NewTaskService(taskRepository TaskRepository, taskListCache TaskListCache) *TaskService {
+	return &TaskService{taskRepository: taskRepository, taskListCache: taskListCache}
 }
 
 func (s *TaskService) Create(boTask bo.Task) (*bo.Task, error) {
@@ -55,7 +55,7 @@ func (s *TaskService) Create(boTask bo.Task) (*bo.Task, error) {
 		assignee = *boTask.Assignee
 	}
 	daoTask := &dao.Task{Title: title, Assignee: assignee}
-	if err := s.repository.Create(daoTask); err != nil {
+	if err := s.taskRepository.Create(daoTask); err != nil {
 		return nil, err
 	}
 	s.invalidateTaskListCache()
@@ -63,11 +63,11 @@ func (s *TaskService) Create(boTask bo.Task) (*bo.Task, error) {
 	return toBusinessTask(daoTask), nil
 }
 
-func (s *TaskService) List(filter dao.TaskFilter, cursor dao.Cursor) ([]bo.Task, error) {
+func (s *TaskService) List(daoTaskFilter dao.TaskFilter, daoCursor dao.Cursor) ([]bo.Task, error) {
 	ctx := context.Background()
-	cacheKey, cacheReady := s.taskListCacheKey(ctx, filter, cursor)
+	cacheKey, cacheReady := s.taskListCacheKey(ctx, daoTaskFilter, daoCursor)
 	if cacheReady {
-		cachedTasks, found, err := s.cache.Get(ctx, cacheKey)
+		cachedTasks, found, err := s.taskListCache.Get(ctx, cacheKey)
 		if err != nil {
 			log.Printf("read task list cache: %v", err)
 		} else if found {
@@ -79,42 +79,42 @@ func (s *TaskService) List(filter dao.TaskFilter, cursor dao.Cursor) ([]bo.Task,
 		}
 	}
 
-	daoTasks, err := s.repository.List(filter, cursor)
+	daoTasks, err := s.taskRepository.List(daoTaskFilter, daoCursor)
 	if err != nil {
 		return nil, err
 	}
 
-	tasks := make([]bo.Task, 0, len(daoTasks))
+	boTasks := make([]bo.Task, 0, len(daoTasks))
 	for i := range daoTasks {
-		tasks = append(tasks, *toBusinessTask(&daoTasks[i]))
+		boTasks = append(boTasks, *toBusinessTask(&daoTasks[i]))
 	}
 	if cacheReady {
-		cachedTasks, err := json.Marshal(tasks)
+		cachedTasks, err := json.Marshal(boTasks)
 		if err != nil {
 			log.Printf("encode task list cache: %v", err)
-		} else if err := s.cache.Set(ctx, cacheKey, cachedTasks, 30*time.Second); err != nil {
+		} else if err := s.taskListCache.Set(ctx, cacheKey, cachedTasks, 30*time.Second); err != nil {
 			log.Printf("write task list cache: %v", err)
 		}
 	}
 
-	return tasks, nil
+	return boTasks, nil
 }
 
-func (s *TaskService) taskListCacheKey(ctx context.Context, filter dao.TaskFilter, cursor dao.Cursor) (string, bool) {
-	if s.cache == nil {
+func (s *TaskService) taskListCacheKey(ctx context.Context, daoTaskFilter dao.TaskFilter, daoCursor dao.Cursor) (string, bool) {
+	if s.taskListCache == nil {
 		return "", false
 	}
 
-	version, err := s.cache.Version(ctx)
+	version, err := s.taskListCache.Version(ctx)
 	if err != nil {
 		log.Printf("read task list cache version: %v", err)
 		return "", false
 	}
 
 	request, err := json.Marshal(struct {
-		Filter dao.TaskFilter
-		Cursor dao.Cursor
-	}{Filter: filter, Cursor: cursor})
+		daoTaskFilter dao.TaskFilter
+		daoCursor     dao.Cursor
+	}{daoTaskFilter: daoTaskFilter, daoCursor: daoCursor})
 	if err != nil {
 		log.Printf("encode task list cache key: %v", err)
 		return "", false
@@ -124,16 +124,16 @@ func (s *TaskService) taskListCacheKey(ctx context.Context, filter dao.TaskFilte
 }
 
 func (s *TaskService) invalidateTaskListCache() {
-	if s.cache == nil {
+	if s.taskListCache == nil {
 		return
 	}
-	if err := s.cache.Invalidate(context.Background()); err != nil {
+	if err := s.taskListCache.Invalidate(context.Background()); err != nil {
 		log.Printf("invalidate task list cache: %v", err)
 	}
 }
 
 func (s *TaskService) GetByID(id int) (*bo.Task, error) {
-	daoTask, err := s.repository.GetByID(id)
+	daoTask, err := s.taskRepository.GetByID(id)
 	if err != nil {
 		return nil, err
 	}
@@ -141,29 +141,29 @@ func (s *TaskService) GetByID(id int) (*bo.Task, error) {
 	return toBusinessTask(daoTask), nil
 }
 
-func (s *TaskService) Update(task bo.Task) (*bo.Task, error) {
-	daoTask, err := s.repository.GetByID(task.ID)
+func (s *TaskService) Update(boTask bo.Task) (*bo.Task, error) {
+	daoTask, err := s.taskRepository.GetByID(boTask.ID)
 	if err != nil {
 		return nil, ErrTaskNotFound
 	}
 
-	if task.Title != nil {
-		trimmedTitle := strings.TrimSpace(*task.Title)
+	if boTask.Title != nil {
+		trimmedTitle := strings.TrimSpace(*boTask.Title)
 		if trimmedTitle == "" {
 			return nil, errors.New("title cannot be empty")
 		}
 		daoTask.Title = trimmedTitle
 	}
 
-	if task.Completed != nil {
-		daoTask.Completed = *task.Completed
+	if boTask.Completed != nil {
+		daoTask.Completed = *boTask.Completed
 	}
 
-	if task.Assignee != nil {
-		daoTask.Assignee = *task.Assignee
+	if boTask.Assignee != nil {
+		daoTask.Assignee = *boTask.Assignee
 	}
 
-	if err := s.repository.Update(daoTask); err != nil {
+	if err := s.taskRepository.Update(daoTask); err != nil {
 		return nil, err
 	}
 	s.invalidateTaskListCache()
@@ -172,20 +172,20 @@ func (s *TaskService) Update(task bo.Task) (*bo.Task, error) {
 }
 
 func (s *TaskService) Delete(id int) error {
-	if err := s.repository.Delete(id); err != nil {
+	if err := s.taskRepository.Delete(id); err != nil {
 		return err
 	}
 	s.invalidateTaskListCache()
 	return nil
 }
 
-func toBusinessTask(task *dao.Task) *bo.Task {
-	title := task.Title
-	completed := task.Completed
-	assignee := task.Assignee
+func toBusinessTask(daotask *dao.Task) *bo.Task {
+	title := daotask.Title
+	completed := daotask.Completed
+	assignee := daotask.Assignee
 
 	return &bo.Task{
-		ID:        task.ID,
+		ID:        daotask.ID,
 		Title:     &title,
 		Completed: &completed,
 		Assignee:  &assignee,

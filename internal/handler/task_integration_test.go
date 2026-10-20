@@ -26,24 +26,24 @@ func TestTaskAPIIntegration(t *testing.T) {
 		t.Skip("DATABASE_URL is not set; skipping database integration test")
 	}
 
-	db, err := sql.Open("pgx", dsn)
+	sqlDB, err := sql.Open("pgx", dsn)
 	if err != nil {
 		t.Fatalf("open database: %v", err)
 	}
-	defer db.Close()
+	defer sqlDB.Close()
 
 	ctx := context.Background()
-	if err := db.PingContext(ctx); err != nil {
+	if err := sqlDB.PingContext(ctx); err != nil {
 		t.Fatalf("database ping failed: %v", err)
 	}
 
-	repo := repository.NewTaskRepository(db)
+	taskRepository := repository.NewTaskRepository(sqlDB)
 
-	if _, err := db.ExecContext(ctx, "TRUNCATE TABLE tasks"); err != nil {
+	if _, err := sqlDB.ExecContext(ctx, "TRUNCATE TABLE tasks"); err != nil {
 		t.Fatalf("truncate tasks table: %v", err)
 	}
 	t.Cleanup(func() {
-		_, _ = db.ExecContext(ctx, "TRUNCATE TABLE tasks")
+		_, _ = sqlDB.ExecContext(ctx, "TRUNCATE TABLE tasks")
 	})
 
 	router := gin.New()
@@ -51,7 +51,7 @@ func TestTaskAPIIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create task count counter: %v", err)
 	}
-	NewTaskHandler(service.NewTaskService(repo, nil), taskCount).RegisterRoutes(router)
+	NewTaskHandler(service.NewTaskService(taskRepository, nil), taskCount).RegisterRoutes(router)
 
 	createResp := doRequest(t, router, http.MethodPost, "/tasks", `{"title":"Write integration test","assignee":"Alex"}`)
 	if createResp.Code != http.StatusCreated {
@@ -115,12 +115,12 @@ func TestTaskAPIIntegration(t *testing.T) {
 func doRequest(t *testing.T, router *gin.Engine, method, path, body string) *httptest.ResponseRecorder {
 	t.Helper()
 
-	req := httptest.NewRequest(method, path, strings.NewReader(body))
+	httpRequest := httptest.NewRequest(method, path, strings.NewReader(body))
 	if body != "" {
-		req.Header.Set("Content-Type", "application/json")
+		httpRequest.Header.Set("Content-Type", "application/json")
 	}
 
-	resp := httptest.NewRecorder()
-	router.ServeHTTP(resp, req)
-	return resp
+	responseRecorder := httptest.NewRecorder()
+	router.ServeHTTP(responseRecorder, httpRequest)
+	return responseRecorder
 }

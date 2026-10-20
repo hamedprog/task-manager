@@ -45,12 +45,11 @@ func run() (runErr error) {
 	if databaseURL == "" {
 		databaseURL = "postgres://taskmanager:taskmanager@localhost:5432/taskmanager?sslmode=disable"
 	}
-
-	db, err := sql.Open("pgx", databaseURL)
+	sqlDB, err := sql.Open("pgx", databaseURL)
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer sqlDB.Close()
 
 	redisAddr := os.Getenv("REDIS_ADDR")
 	if redisAddr == "" {
@@ -66,11 +65,11 @@ func run() (runErr error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := db.PingContext(ctx); err != nil {
+	if err := sqlDB.PingContext(ctx); err != nil {
 		return err
 	}
 
-	taskRepository := repository.NewTaskRepository(db)
+	taskRepository := repository.NewTaskRepository(sqlDB)
 	taskService := service.NewTaskService(taskRepository, taskListCache)
 	httpMetrics, shutdownMetrics, err := telemetry.InitMetrics(context.Background(), "task-manager")
 	if err != nil {
@@ -85,11 +84,13 @@ func run() (runErr error) {
 	}()
 
 	taskHandler := handler.NewTaskHandler(taskService, httpMetrics.TaskCount)
-
-	router := gin.Default()
+	router := gin.New()
+	router.Use(gin.Logger())
 	router.Use(cors.Default())
-	router.Use(httpMetrics.Middleware())
+	router.Use(cors.Default())
 	router.Use(otelgin.Middleware("task-manager"))
+	router.Use(gin.Recovery())
+	router.Use(httpMetrics.Middleware())
 	taskHandler.RegisterRoutes(router)
 
 	return router.Run(":9090")

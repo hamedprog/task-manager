@@ -20,12 +20,12 @@ import (
 func newMockTaskHandler(t *testing.T) (*MockTaskService, *TaskHandler) {
 	t.Helper()
 
-	service := NewMockTaskService(gomock.NewController(t))
+	mockTaskService := NewMockTaskService(gomock.NewController(t))
 	taskCount, err := noop.NewMeterProvider().Meter("test").Int64Counter("tasks_count")
 	if err != nil {
 		t.Fatalf("create task count counter: %v", err)
 	}
-	return service, NewTaskHandler(service, taskCount)
+	return mockTaskService, NewTaskHandler(mockTaskService, taskCount)
 }
 
 func stringPointer(value string) *string {
@@ -38,27 +38,27 @@ func boolPointer(value bool) *bool {
 
 func newTestContext(method, body string) (*gin.Context, *httptest.ResponseRecorder) {
 	gin.SetMode(gin.TestMode)
-	recorder := httptest.NewRecorder()
-	context, _ := gin.CreateTestContext(recorder)
-	context.Request = httptest.NewRequest(method, "/", strings.NewReader(body))
-	return context, recorder
+	ResponseRecorder := httptest.NewRecorder()
+	ginContext, _ := gin.CreateTestContext(ResponseRecorder)
+	ginContext.Request = httptest.NewRequest(method, "/", strings.NewReader(body))
+	return ginContext, ResponseRecorder
 }
 
 func TestTaskHandlerCreateTask(t *testing.T) {
 	t.Run("created", func(t *testing.T) {
-		service, handler := newMockTaskHandler(t)
-		service.EXPECT().
+		mockTaskService, taskHandler := newMockTaskHandler(t)
+		mockTaskService.EXPECT().
 			Create(gomock.Eq(bo.Task{Title: stringPointer("Write tests"), Assignee: stringPointer("Alex")})).
 			Return(&bo.Task{ID: 3, Title: stringPointer("Write tests"), Completed: boolPointer(false), Assignee: stringPointer("Alex")}, nil)
-		context, recorder := newTestContext(http.MethodPost, `{"title":"Write tests","assignee":"Alex"}`)
+		ginContext, responseRecorder := newTestContext(http.MethodPost, `{"title":"Write tests","assignee":"Alex"}`)
 
-		handler.CreateTask(context)
+		taskHandler.CreateTask(ginContext)
 
-		if recorder.Code != http.StatusCreated {
-			t.Fatalf("status = %d, want %d", recorder.Code, http.StatusCreated)
+		if responseRecorder.Code != http.StatusCreated {
+			t.Fatalf("status = %d, want %d", responseRecorder.Code, http.StatusCreated)
 		}
 		var got api.Task
-		if err := json.Unmarshal(recorder.Body.Bytes(), &got); err != nil {
+		if err := json.Unmarshal(responseRecorder.Body.Bytes(), &got); err != nil {
 			t.Fatalf("decode response: %v", err)
 		}
 		if got != (api.Task{Id: 3, Title: "Write tests", Assignee: "Alex"}) {
@@ -67,19 +67,19 @@ func TestTaskHandlerCreateTask(t *testing.T) {
 	})
 
 	t.Run("missing assignee defaults to empty", func(t *testing.T) {
-		service, handler := newMockTaskHandler(t)
-		service.EXPECT().
+		mockTaskService, taskHandler := newMockTaskHandler(t)
+		mockTaskService.EXPECT().
 			Create(gomock.Eq(bo.Task{Title: stringPointer("Write tests"), Assignee: stringPointer("")})).
 			Return(&bo.Task{ID: 3, Title: stringPointer("Write tests"), Completed: boolPointer(false), Assignee: stringPointer("")}, nil)
-		context, recorder := newTestContext(http.MethodPost, `{"title":"Write tests"}`)
+		ginContext, responseRecorder := newTestContext(http.MethodPost, `{"title":"Write tests"}`)
 
-		handler.CreateTask(context)
+		taskHandler.CreateTask(ginContext)
 
-		if recorder.Code != http.StatusCreated {
-			t.Fatalf("status = %d, want %d", recorder.Code, http.StatusCreated)
+		if responseRecorder.Code != http.StatusCreated {
+			t.Fatalf("status = %d, want %d", responseRecorder.Code, http.StatusCreated)
 		}
 		var got api.Task
-		if err := json.Unmarshal(recorder.Body.Bytes(), &got); err != nil {
+		if err := json.Unmarshal(responseRecorder.Body.Bytes(), &got); err != nil {
 			t.Fatalf("decode response: %v", err)
 		}
 		if got.Assignee != "" {
@@ -88,30 +88,30 @@ func TestTaskHandlerCreateTask(t *testing.T) {
 	})
 
 	t.Run("invalid JSON", func(t *testing.T) {
-		_, handler := newMockTaskHandler(t)
-		context, recorder := newTestContext(http.MethodPost, `{`)
+		_, taskHandler := newMockTaskHandler(t)
+		ginContext, responseRecorder := newTestContext(http.MethodPost, `{`)
 
-		handler.CreateTask(context)
+		taskHandler.CreateTask(ginContext)
 
-		if recorder.Code != http.StatusBadRequest {
-			t.Errorf("status = %d, want %d", recorder.Code, http.StatusBadRequest)
+		if responseRecorder.Code != http.StatusBadRequest {
+			t.Errorf("status = %d, want %d", responseRecorder.Code, http.StatusBadRequest)
 		}
 	})
 
 	t.Run("empty title", func(t *testing.T) {
-		service, handler := newMockTaskHandler(t)
-		service.EXPECT().
+		mockTaskService, taskHandler := newMockTaskHandler(t)
+		mockTaskService.EXPECT().
 			Create(gomock.Any()).
 			Return(nil, errors.New("title cannot be empty"))
-		context, recorder := newTestContext(http.MethodPost, `{"title":" "}`)
+		ginContext, responseRecorder := newTestContext(http.MethodPost, `{"title":" "}`)
 
-		handler.CreateTask(context)
+		taskHandler.CreateTask(ginContext)
 
-		if recorder.Code != http.StatusBadRequest {
-			t.Errorf("status = %d, want %d", recorder.Code, http.StatusBadRequest)
+		if responseRecorder.Code != http.StatusBadRequest {
+			t.Errorf("status = %d, want %d", responseRecorder.Code, http.StatusBadRequest)
 		}
 		var got api.Error
-		if err := json.Unmarshal(recorder.Body.Bytes(), &got); err != nil {
+		if err := json.Unmarshal(responseRecorder.Body.Bytes(), &got); err != nil {
 			t.Fatalf("decode response: %v", err)
 		}
 		if got.Error != "title cannot be empty" {
@@ -120,48 +120,48 @@ func TestTaskHandlerCreateTask(t *testing.T) {
 	})
 
 	t.Run("service failure", func(t *testing.T) {
-		service, handler := newMockTaskHandler(t)
-		service.EXPECT().
+		mockTaskService, taskHandler := newMockTaskHandler(t)
+		mockTaskService.EXPECT().
 			Create(gomock.Any()).
 			Return(nil, errors.New("database unavailable"))
-		context, recorder := newTestContext(http.MethodPost, `{"title":"Task"}`)
+		ginContext, responseRecorder := newTestContext(http.MethodPost, `{"title":"Task"}`)
 
-		handler.CreateTask(context)
+		taskHandler.CreateTask(ginContext)
 
-		if recorder.Code != http.StatusInternalServerError {
-			t.Errorf("status = %d, want %d", recorder.Code, http.StatusInternalServerError)
+		if responseRecorder.Code != http.StatusInternalServerError {
+			t.Errorf("status = %d, want %d", responseRecorder.Code, http.StatusInternalServerError)
 		}
 	})
 }
 
 func TestTaskHandlerListTasks(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
-		service, handler := newMockTaskHandler(t)
+		mockTaskService, taskHandler := newMockTaskHandler(t)
 		completed := false
 		limit := 5
 		offset := 10
-		service.EXPECT().List(
+		mockTaskService.EXPECT().List(
 			dao.TaskFilter{Assignee: stringPointer("Alex"), Completed: &completed},
 			dao.Cursor{Limit: &limit, Offset: &offset},
 		).Return([]bo.Task{
 			{ID: 1, Title: stringPointer("First"), Completed: boolPointer(false), Assignee: stringPointer("Alex")},
 			{ID: 2, Title: stringPointer("Second"), Completed: boolPointer(true), Assignee: stringPointer("Sam")},
 		}, nil)
-		context, recorder := newTestContext(http.MethodGet, "")
-		context.Request.URL.RawQuery = "assignee=Alex&completed=false&limit=5&offset=10"
+		ginContext, responseRecorder := newTestContext(http.MethodGet, "")
+		ginContext.Request.URL.RawQuery = "assignee=Alex&completed=false&limit=5&offset=10"
 
-		handler.ListTasks(context, api.ListTasksParams{
+		taskHandler.ListTasks(ginContext, api.ListTasksParams{
 			Assignee:  stringPointer("Alex"),
 			Completed: &completed,
 			Limit:     &limit,
 			Offset:    &offset,
 		})
 
-		if recorder.Code != http.StatusOK {
-			t.Fatalf("status = %d, want %d", recorder.Code, http.StatusOK)
+		if responseRecorder.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", responseRecorder.Code, http.StatusOK)
 		}
 		var got []api.Task
-		if err := json.Unmarshal(recorder.Body.Bytes(), &got); err != nil {
+		if err := json.Unmarshal(responseRecorder.Body.Bytes(), &got); err != nil {
 			t.Fatalf("decode response: %v", err)
 		}
 		want := []api.Task{
@@ -179,41 +179,41 @@ func TestTaskHandlerListTasks(t *testing.T) {
 	})
 
 	t.Run("service failure", func(t *testing.T) {
-		service, handler := newMockTaskHandler(t)
-		service.EXPECT().List(dao.TaskFilter{}, dao.Cursor{}).Return(nil, errors.New("database unavailable"))
-		context, recorder := newTestContext(http.MethodGet, "")
+		mockTaskService, taskHandler := newMockTaskHandler(t)
+		mockTaskService.EXPECT().List(dao.TaskFilter{}, dao.Cursor{}).Return(nil, errors.New("database unavailable"))
+		ginContext, responseRecorder := newTestContext(http.MethodGet, "")
 
-		handler.ListTasks(context, api.ListTasksParams{})
+		taskHandler.ListTasks(ginContext, api.ListTasksParams{})
 
-		if recorder.Code != http.StatusInternalServerError {
-			t.Errorf("status = %d, want %d", recorder.Code, http.StatusInternalServerError)
+		if responseRecorder.Code != http.StatusInternalServerError {
+			t.Errorf("status = %d, want %d", responseRecorder.Code, http.StatusInternalServerError)
 		}
 	})
 
 	t.Run("invalid cursor values", func(t *testing.T) {
-		_, handler := newMockTaskHandler(t)
+		_, taskHandler := newMockTaskHandler(t)
 		limit := 0
-		context, recorder := newTestContext(http.MethodGet, "")
+		ginContext, responseRecorder := newTestContext(http.MethodGet, "")
 
-		handler.ListTasks(context, api.ListTasksParams{Limit: &limit})
+		taskHandler.ListTasks(ginContext, api.ListTasksParams{Limit: &limit})
 
-		if recorder.Code != http.StatusBadRequest {
-			t.Errorf("status = %d, want %d", recorder.Code, http.StatusBadRequest)
+		if responseRecorder.Code != http.StatusBadRequest {
+			t.Errorf("status = %d, want %d", responseRecorder.Code, http.StatusBadRequest)
 		}
 	})
 
 	t.Run("invalid completed filter", func(t *testing.T) {
-		_, handler := newMockTaskHandler(t)
+		_, taskHandler := newMockTaskHandler(t)
 		router := gin.New()
-		handler.RegisterRoutes(router)
-		recorder := httptest.NewRecorder()
-		router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/tasks?completed=sometimes", nil))
+		taskHandler.RegisterRoutes(router)
+		responseRecorder := httptest.NewRecorder()
+		router.ServeHTTP(responseRecorder, httptest.NewRequest(http.MethodGet, "/tasks?completed=sometimes", nil))
 
-		if recorder.Code != http.StatusBadRequest {
-			t.Errorf("status = %d, want %d", recorder.Code, http.StatusBadRequest)
+		if responseRecorder.Code != http.StatusBadRequest {
+			t.Errorf("status = %d, want %d", responseRecorder.Code, http.StatusBadRequest)
 		}
 		var got api.Error
-		if err := json.Unmarshal(recorder.Body.Bytes(), &got); err != nil {
+		if err := json.Unmarshal(responseRecorder.Body.Bytes(), &got); err != nil {
 			t.Fatalf("decode response: %v", err)
 		}
 		if got.Error != "invalid task filter" {
@@ -224,19 +224,19 @@ func TestTaskHandlerListTasks(t *testing.T) {
 
 func TestTaskHandlerGetTask(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
-		service, handler := newMockTaskHandler(t)
-		service.EXPECT().
+		mockTaskService, taskHandler := newMockTaskHandler(t)
+		mockTaskService.EXPECT().
 			GetByID(4).
 			Return(&bo.Task{ID: 4, Title: stringPointer("Read docs"), Completed: boolPointer(true), Assignee: stringPointer("Alex")}, nil)
-		context, recorder := newTestContext(http.MethodGet, "")
+		ginContext, responseRecorder := newTestContext(http.MethodGet, "")
 
-		handler.GetTask(context, 4)
+		taskHandler.GetTask(ginContext, 4)
 
-		if recorder.Code != http.StatusOK {
-			t.Fatalf("status = %d, want %d", recorder.Code, http.StatusOK)
+		if responseRecorder.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", responseRecorder.Code, http.StatusOK)
 		}
 		var got api.Task
-		if err := json.Unmarshal(recorder.Body.Bytes(), &got); err != nil {
+		if err := json.Unmarshal(responseRecorder.Body.Bytes(), &got); err != nil {
 			t.Fatalf("decode response: %v", err)
 		}
 		if got != (api.Task{Id: 4, Title: "Read docs", Completed: true, Assignee: "Alex"}) {
@@ -245,33 +245,33 @@ func TestTaskHandlerGetTask(t *testing.T) {
 	})
 
 	t.Run("invalid ID", func(t *testing.T) {
-		_, handler := newMockTaskHandler(t)
-		context, recorder := newTestContext(http.MethodGet, "")
+		_, taskHandler := newMockTaskHandler(t)
+		ginContext, responseRecorder := newTestContext(http.MethodGet, "")
 
-		handler.GetTask(context, 0)
+		taskHandler.GetTask(ginContext, 0)
 
-		if recorder.Code != http.StatusBadRequest {
-			t.Errorf("status = %d, want %d", recorder.Code, http.StatusBadRequest)
+		if responseRecorder.Code != http.StatusBadRequest {
+			t.Errorf("status = %d, want %d", responseRecorder.Code, http.StatusBadRequest)
 		}
 	})
 
 	t.Run("not found", func(t *testing.T) {
-		service, handler := newMockTaskHandler(t)
-		service.EXPECT().GetByID(4).Return(nil, errors.New("missing"))
-		context, recorder := newTestContext(http.MethodGet, "")
+		mockTaskService, taskHandler := newMockTaskHandler(t)
+		mockTaskService.EXPECT().GetByID(4).Return(nil, errors.New("missing"))
+		ginContext, responseRecorder := newTestContext(http.MethodGet, "")
 
-		handler.GetTask(context, 4)
+		taskHandler.GetTask(ginContext, 4)
 
-		if recorder.Code != http.StatusNotFound {
-			t.Errorf("status = %d, want %d", recorder.Code, http.StatusNotFound)
+		if responseRecorder.Code != http.StatusNotFound {
+			t.Errorf("status = %d, want %d", responseRecorder.Code, http.StatusNotFound)
 		}
 	})
 }
 
 func TestTaskHandlerUpdateTask(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
-		service, handler := newMockTaskHandler(t)
-		service.EXPECT().
+		mockTaskService, taskHandler := newMockTaskHandler(t)
+		mockTaskService.EXPECT().
 			Update(gomock.Eq(bo.Task{
 				ID:        4,
 				Title:     stringPointer("Updated"),
@@ -279,15 +279,15 @@ func TestTaskHandlerUpdateTask(t *testing.T) {
 				Assignee:  stringPointer("Alex"),
 			})).
 			Return(&bo.Task{ID: 4, Title: stringPointer("Updated"), Completed: boolPointer(true), Assignee: stringPointer("Alex")}, nil)
-		context, recorder := newTestContext(http.MethodPatch, `{"title":"Updated","completed":true,"assignee":"Alex"}`)
+		ginContext, responseRecorder := newTestContext(http.MethodPatch, `{"title":"Updated","completed":true,"assignee":"Alex"}`)
 
-		handler.UpdateTask(context, 4)
+		taskHandler.UpdateTask(ginContext, 4)
 
-		if recorder.Code != http.StatusOK {
-			t.Fatalf("status = %d, want %d", recorder.Code, http.StatusOK)
+		if responseRecorder.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", responseRecorder.Code, http.StatusOK)
 		}
 		var got api.Task
-		if err := json.Unmarshal(recorder.Body.Bytes(), &got); err != nil {
+		if err := json.Unmarshal(responseRecorder.Body.Bytes(), &got); err != nil {
 			t.Fatalf("decode response: %v", err)
 		}
 		if got != (api.Task{Id: 4, Title: "Updated", Completed: true, Assignee: "Alex"}) {
@@ -296,8 +296,8 @@ func TestTaskHandlerUpdateTask(t *testing.T) {
 	})
 
 	t.Run("assignee only", func(t *testing.T) {
-		service, handler := newMockTaskHandler(t)
-		service.EXPECT().
+		mockTaskService, taskHandler := newMockTaskHandler(t)
+		mockTaskService.EXPECT().
 			Update(gomock.Eq(bo.Task{ID: 4, Assignee: stringPointer("Sam")})).
 			Return(&bo.Task{
 				ID:        4,
@@ -305,15 +305,15 @@ func TestTaskHandlerUpdateTask(t *testing.T) {
 				Completed: boolPointer(false),
 				Assignee:  stringPointer("Sam"),
 			}, nil)
-		context, recorder := newTestContext(http.MethodPatch, `{"assignee":"Sam"}`)
+		ginContext, responseRecorder := newTestContext(http.MethodPatch, `{"assignee":"Sam"}`)
 
-		handler.UpdateTask(context, 4)
+		taskHandler.UpdateTask(ginContext, 4)
 
-		if recorder.Code != http.StatusOK {
-			t.Fatalf("status = %d, want %d", recorder.Code, http.StatusOK)
+		if responseRecorder.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", responseRecorder.Code, http.StatusOK)
 		}
 		var got api.Task
-		if err := json.Unmarshal(recorder.Body.Bytes(), &got); err != nil {
+		if err := json.Unmarshal(responseRecorder.Body.Bytes(), &got); err != nil {
 			t.Fatalf("decode response: %v", err)
 		}
 		if got.Assignee != "Sam" {
@@ -322,38 +322,38 @@ func TestTaskHandlerUpdateTask(t *testing.T) {
 	})
 
 	t.Run("invalid ID", func(t *testing.T) {
-		_, handler := newMockTaskHandler(t)
-		context, recorder := newTestContext(http.MethodPatch, `{"title":"Updated"}`)
+		_, taskHandler := newMockTaskHandler(t)
+		ginContext, responseRecorder := newTestContext(http.MethodPatch, `{"title":"Updated"}`)
 
-		handler.UpdateTask(context, 0)
+		taskHandler.UpdateTask(ginContext, 0)
 
-		if recorder.Code != http.StatusBadRequest {
-			t.Errorf("status = %d, want %d", recorder.Code, http.StatusBadRequest)
+		if responseRecorder.Code != http.StatusBadRequest {
+			t.Errorf("status = %d, want %d", responseRecorder.Code, http.StatusBadRequest)
 		}
 	})
 
 	t.Run("invalid JSON", func(t *testing.T) {
-		_, handler := newMockTaskHandler(t)
-		context, recorder := newTestContext(http.MethodPatch, `{`)
+		_, taskHandler := newMockTaskHandler(t)
+		ginContext, responseRecorder := newTestContext(http.MethodPatch, `{`)
 
-		handler.UpdateTask(context, 4)
+		taskHandler.UpdateTask(ginContext, 4)
 
-		if recorder.Code != http.StatusBadRequest {
-			t.Errorf("status = %d, want %d", recorder.Code, http.StatusBadRequest)
+		if responseRecorder.Code != http.StatusBadRequest {
+			t.Errorf("status = %d, want %d", responseRecorder.Code, http.StatusBadRequest)
 		}
 	})
 
 	t.Run("no fields to update", func(t *testing.T) {
-		_, handler := newMockTaskHandler(t)
-		context, recorder := newTestContext(http.MethodPatch, `{}`)
+		_, taskHandler := newMockTaskHandler(t)
+		ginContext, responseRecorder := newTestContext(http.MethodPatch, `{}`)
 
-		handler.UpdateTask(context, 4)
+		taskHandler.UpdateTask(ginContext, 4)
 
-		if recorder.Code != http.StatusBadRequest {
-			t.Errorf("status = %d, want %d", recorder.Code, http.StatusBadRequest)
+		if responseRecorder.Code != http.StatusBadRequest {
+			t.Errorf("status = %d, want %d", responseRecorder.Code, http.StatusBadRequest)
 		}
 		var got api.Error
-		if err := json.Unmarshal(recorder.Body.Bytes(), &got); err != nil {
+		if err := json.Unmarshal(responseRecorder.Body.Bytes(), &got); err != nil {
 			t.Fatalf("decode response: %v", err)
 		}
 		if got.Error != "no fields to update" {
@@ -362,85 +362,85 @@ func TestTaskHandlerUpdateTask(t *testing.T) {
 	})
 
 	t.Run("empty title", func(t *testing.T) {
-		service, handler := newMockTaskHandler(t)
-		service.EXPECT().
+		mockTaskService, taskHandler := newMockTaskHandler(t)
+		mockTaskService.EXPECT().
 			Update(gomock.Any()).
 			Return(nil, errors.New("title cannot be empty"))
-		context, recorder := newTestContext(http.MethodPatch, `{"title":" "}`)
+		ginContext, responseRecorder := newTestContext(http.MethodPatch, `{"title":" "}`)
 
-		handler.UpdateTask(context, 4)
+		taskHandler.UpdateTask(ginContext, 4)
 
-		if recorder.Code != http.StatusBadRequest {
-			t.Errorf("status = %d, want %d", recorder.Code, http.StatusBadRequest)
+		if responseRecorder.Code != http.StatusBadRequest {
+			t.Errorf("status = %d, want %d", responseRecorder.Code, http.StatusBadRequest)
 		}
 	})
 
 	t.Run("not found", func(t *testing.T) {
-		service, handler := newMockTaskHandler(t)
-		service.EXPECT().
+		mockTaskService, taskHandler := newMockTaskHandler(t)
+		mockTaskService.EXPECT().
 			Update(gomock.Any()).
 			Return(nil, errors.New("task not found"))
-		context, recorder := newTestContext(http.MethodPatch, `{"completed":true}`)
+		ginContext, responseRecorder := newTestContext(http.MethodPatch, `{"completed":true}`)
 
-		handler.UpdateTask(context, 4)
+		taskHandler.UpdateTask(ginContext, 4)
 
-		if recorder.Code != http.StatusNotFound {
-			t.Errorf("status = %d, want %d", recorder.Code, http.StatusNotFound)
+		if responseRecorder.Code != http.StatusNotFound {
+			t.Errorf("status = %d, want %d", responseRecorder.Code, http.StatusNotFound)
 		}
 	})
 
 	t.Run("service failure", func(t *testing.T) {
-		service, handler := newMockTaskHandler(t)
-		service.EXPECT().
+		mockTaskService, taskHandler := newMockTaskHandler(t)
+		mockTaskService.EXPECT().
 			Update(gomock.Any()).
 			Return(nil, errors.New("database unavailable"))
-		context, recorder := newTestContext(http.MethodPatch, `{"completed":true}`)
+		ginContext, responseRecorder := newTestContext(http.MethodPatch, `{"completed":true}`)
 
-		handler.UpdateTask(context, 4)
+		taskHandler.UpdateTask(ginContext, 4)
 
-		if recorder.Code != http.StatusInternalServerError {
-			t.Errorf("status = %d, want %d", recorder.Code, http.StatusInternalServerError)
+		if responseRecorder.Code != http.StatusInternalServerError {
+			t.Errorf("status = %d, want %d", responseRecorder.Code, http.StatusInternalServerError)
 		}
 	})
 }
 
 func TestTaskHandlerDeleteTask(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
-		service, handler := newMockTaskHandler(t)
-		service.EXPECT().Delete(4).Return(nil)
-		context, recorder := newTestContext(http.MethodDelete, "")
+		mockTaskService, taskHandler := newMockTaskHandler(t)
+		mockTaskService.EXPECT().Delete(4).Return(nil)
+		ginContext, responseRecorder := newTestContext(http.MethodDelete, "")
 
-		handler.DeleteTask(context, 4)
-		context.Writer.WriteHeaderNow()
+		taskHandler.DeleteTask(ginContext, 4)
+		ginContext.Writer.WriteHeaderNow()
 
-		if recorder.Code != http.StatusNoContent {
-			t.Errorf("status = %d, want %d", recorder.Code, http.StatusNoContent)
+		if responseRecorder.Code != http.StatusNoContent {
+			t.Errorf("status = %d, want %d", responseRecorder.Code, http.StatusNoContent)
 		}
-		if recorder.Body.Len() != 0 {
-			t.Errorf("response body = %q, want empty", recorder.Body.String())
+		if responseRecorder.Body.Len() != 0 {
+			t.Errorf("response body = %q, want empty", responseRecorder.Body.String())
 		}
 	})
 
 	t.Run("invalid ID", func(t *testing.T) {
-		_, handler := newMockTaskHandler(t)
-		context, recorder := newTestContext(http.MethodDelete, "")
+		_, taskHandler := newMockTaskHandler(t)
+		ginContext, responseRecorder := newTestContext(http.MethodDelete, "")
 
-		handler.DeleteTask(context, 0)
+		taskHandler.DeleteTask(ginContext, 0)
 
-		if recorder.Code != http.StatusBadRequest {
-			t.Errorf("status = %d, want %d", recorder.Code, http.StatusBadRequest)
+		if responseRecorder.Code != http.StatusBadRequest {
+			t.Errorf("status = %d, want %d", responseRecorder.Code, http.StatusBadRequest)
 		}
 	})
 
 	t.Run("not found", func(t *testing.T) {
-		service, handler := newMockTaskHandler(t)
-		service.EXPECT().Delete(4).Return(errors.New("missing"))
-		context, recorder := newTestContext(http.MethodDelete, "")
+		mockTaskService, taskHandler := newMockTaskHandler(t)
+		mockTaskService.EXPECT().Delete(4).Return(errors.New("missing"))
+		ginContext, responseRecorder := newTestContext(http.MethodDelete, "")
 
-		handler.DeleteTask(context, 4)
+		taskHandler.DeleteTask(ginContext, 4)
 
-		if recorder.Code != http.StatusNotFound {
-			t.Errorf("status = %d, want %d", recorder.Code, http.StatusNotFound)
+		if responseRecorder.Code != http.StatusNotFound {
+			t.Errorf("status = %d, want %d", responseRecorder.Code, http.StatusNotFound)
 		}
 	})
 }
