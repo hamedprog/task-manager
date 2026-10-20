@@ -8,8 +8,9 @@ Build and start the API and PostgreSQL with Docker Compose:
 docker compose up --build
 ```
 
-The API is available at `http://localhost:9090`. To run the API directly on
-your machine instead, start PostgreSQL:
+The API is available at `http://localhost:9090`. Compose also starts Redis for
+task-list caching. To run the API directly on your machine, start PostgreSQL
+and Redis:
 
 Swagger UI is available at `http://localhost:8080` and loads its API definition
 from `api/openapi.yaml`.
@@ -18,7 +19,7 @@ Prometheus is available at `http://localhost:9091`. It scrapes metrics exposed
 by the OpenTelemetry Collector, which also forwards traces to Jaeger.
 
 ```sh
-docker compose up -d postgres
+docker compose up -d postgres redis
 ```
 
 Then run:
@@ -31,6 +32,9 @@ The API uses
 `postgres://taskmanager:taskmanager@localhost:5432/taskmanager?sslmode=disable`
 by default when run locally. Set `DATABASE_URL` to override it. The `tasks`
 table is created at API startup if it does not already exist.
+Set `REDIS_ADDR` to override the Redis address; it defaults to
+`localhost:6379`. Task list responses are cached for 30 seconds, with the cache
+version incremented after successful task creates, updates, and deletes.
 
 Incoming HTTP requests are traced and measured with OpenTelemetry and exported
 over OTLP/HTTP to the Collector. Prometheus receives the total request counter,

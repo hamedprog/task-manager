@@ -1,8 +1,15 @@
 package service
 
 import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"log"
 	"strings"
+	"time"
 
 	"task-manager/internal/object/bo"
 	"task-manager/internal/object/dao"
@@ -18,12 +25,20 @@ type TaskRepository interface {
 	Delete(id int) error
 }
 
-type TaskService struct {
-	repository TaskRepository
+type TaskListCache interface {
+	Version(ctx context.Context) (int64, error)
+	Get(ctx context.Context, key string) ([]byte, bool, error)
+	Set(ctx context.Context, key string, value []byte, ttl time.Duration) error
+	Invalidate(ctx context.Context) error
 }
 
-func NewTaskService(repository TaskRepository) *TaskService {
-	return &TaskService{repository: repository}
+type TaskService struct {
+	repository TaskRepository
+	cache      TaskListCache
+}
+
+func NewTaskService(repository TaskRepository, cache TaskListCache) *TaskService {
+	return &TaskService{repository: repository, cache: cache}
 }
 
 func (s *TaskService) Create(boTask bo.Task) (*bo.Task, error) {
@@ -43,11 +58,27 @@ func (s *TaskService) Create(boTask bo.Task) (*bo.Task, error) {
 	if err := s.repository.Create(daoTask); err != nil {
 		return nil, err
 	}
+	s.invalidateTaskListCache()
 
 	return toBusinessTask(daoTask), nil
 }
 
 func (s *TaskService) List(filter dao.TaskFilter, cursor dao.Cursor) ([]bo.Task, error) {
+	ctx := context.Background()
+	cacheKey, cacheReady := s.taskListCacheKey(ctx, filter, cursor)
+	if cacheReady {
+		cachedTasks, found, err := s.cache.Get(ctx, cacheKey)
+		if err != nil {
+			log.Printf("read task list cache: %v", err)
+		} else if found {
+			var tasks []bo.Task
+			if err := json.Unmarshal(cachedTasks, &tasks); err == nil {
+				return tasks, nil
+			}
+			log.Printf("decode cached task list: invalid cached JSON")
+		}
+	}
+
 	daoTasks, err := s.repository.List(filter, cursor)
 	if err != nil {
 		return nil, err
@@ -57,8 +88,48 @@ func (s *TaskService) List(filter dao.TaskFilter, cursor dao.Cursor) ([]bo.Task,
 	for i := range daoTasks {
 		tasks = append(tasks, *toBusinessTask(&daoTasks[i]))
 	}
+	if cacheReady {
+		cachedTasks, err := json.Marshal(tasks)
+		if err != nil {
+			log.Printf("encode task list cache: %v", err)
+		} else if err := s.cache.Set(ctx, cacheKey, cachedTasks, 30*time.Second); err != nil {
+			log.Printf("write task list cache: %v", err)
+		}
+	}
 
 	return tasks, nil
+}
+
+func (s *TaskService) taskListCacheKey(ctx context.Context, filter dao.TaskFilter, cursor dao.Cursor) (string, bool) {
+	if s.cache == nil {
+		return "", false
+	}
+
+	version, err := s.cache.Version(ctx)
+	if err != nil {
+		log.Printf("read task list cache version: %v", err)
+		return "", false
+	}
+
+	request, err := json.Marshal(struct {
+		Filter dao.TaskFilter
+		Cursor dao.Cursor
+	}{Filter: filter, Cursor: cursor})
+	if err != nil {
+		log.Printf("encode task list cache key: %v", err)
+		return "", false
+	}
+	hash := sha256.Sum256(request)
+	return fmt.Sprintf("tasks:list:v%d:%s", version, hex.EncodeToString(hash[:])), true
+}
+
+func (s *TaskService) invalidateTaskListCache() {
+	if s.cache == nil {
+		return
+	}
+	if err := s.cache.Invalidate(context.Background()); err != nil {
+		log.Printf("invalidate task list cache: %v", err)
+	}
 }
 
 func (s *TaskService) GetByID(id int) (*bo.Task, error) {
@@ -95,12 +166,17 @@ func (s *TaskService) Update(task bo.Task) (*bo.Task, error) {
 	if err := s.repository.Update(daoTask); err != nil {
 		return nil, err
 	}
+	s.invalidateTaskListCache()
 
 	return toBusinessTask(daoTask), nil
 }
 
 func (s *TaskService) Delete(id int) error {
-	return s.repository.Delete(id)
+	if err := s.repository.Delete(id); err != nil {
+		return err
+	}
+	s.invalidateTaskListCache()
+	return nil
 }
 
 func toBusinessTask(task *dao.Task) *bo.Task {

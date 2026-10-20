@@ -3,6 +3,7 @@ package service
 import (
 	"errors"
 	"testing"
+	"time"
 
 	"task-manager/internal/object/bo"
 	"task-manager/internal/object/dao"
@@ -14,7 +15,7 @@ func newMockTaskService(t *testing.T) (*MockTaskRepository, *TaskService) {
 	t.Helper()
 
 	repository := NewMockTaskRepository(gomock.NewController(t))
-	return repository, NewTaskService(repository)
+	return repository, NewTaskService(repository, nil)
 }
 
 func stringPointer(value string) *string {
@@ -318,4 +319,73 @@ func TestTaskServiceDelete(t *testing.T) {
 			t.Errorf("Delete(8) error = %v, want %v", err, repositoryErr)
 		}
 	})
+}
+
+func TestTaskServiceListCachesByFilterAndCursor(t *testing.T) {
+	repository := NewMockTaskRepository(gomock.NewController(t))
+	cache := NewMockTaskListCache(gomock.NewController(t))
+	taskService := NewTaskService(repository, cache)
+
+	cachedTasks := []byte(`[{"id":1,"title":"Cached task","completed":false,"assignee":""}]`)
+	cache.EXPECT().Version(gomock.Any()).Return(int64(0), nil).Times(2)
+	cache.EXPECT().Get(gomock.Any(), gomock.Any()).Return(nil, false, nil)
+	repository.EXPECT().List(dao.TaskFilter{}, dao.Cursor{}).Return([]dao.Task{
+		{ID: 1, Title: "Cached task"},
+	}, nil).Times(1)
+	cache.EXPECT().Set(gomock.Any(), gomock.Any(), gomock.Any(), 30*time.Second).Return(nil)
+	cache.EXPECT().Get(gomock.Any(), gomock.Any()).Return(cachedTasks, true, nil)
+
+	for i := 0; i < 2; i++ {
+		tasks, err := taskService.List(dao.TaskFilter{}, dao.Cursor{})
+		if err != nil {
+			t.Fatalf("List() error = %v", err)
+		}
+		if len(tasks) != 1 || tasks[0].ID != 1 {
+			t.Fatalf("List() = %+v, want cached task 1", tasks)
+		}
+	}
+}
+
+func TestTaskServiceMutationsInvalidateTaskListCache(t *testing.T) {
+	repository := NewMockTaskRepository(gomock.NewController(t))
+	cache := NewMockTaskListCache(gomock.NewController(t))
+	taskService := NewTaskService(repository, cache)
+	cache.EXPECT().Invalidate(gomock.Any()).Return(nil).Times(3)
+
+	repository.EXPECT().Create(gomock.Any()).DoAndReturn(func(task *dao.Task) error {
+		task.ID = 1
+		return nil
+	})
+	if _, err := taskService.Create(bo.Task{Title: stringPointer("Created")}); err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	repository.EXPECT().GetByID(1).Return(&dao.Task{ID: 1, Title: "Created"}, nil)
+	repository.EXPECT().Update(gomock.Any()).Return(nil)
+	if _, err := taskService.Update(bo.Task{ID: 1, Title: stringPointer("Updated")}); err != nil {
+		t.Fatalf("Update() error = %v", err)
+	}
+
+	repository.EXPECT().Delete(1).Return(nil)
+	if err := taskService.Delete(1); err != nil {
+		t.Fatalf("Delete() error = %v", err)
+	}
+}
+
+func TestTaskServiceListReadsCachedTasks(t *testing.T) {
+	cache := NewMockTaskListCache(gomock.NewController(t))
+	taskService := NewTaskService(NewMockTaskRepository(gomock.NewController(t)), cache)
+	cache.EXPECT().Version(gomock.Any()).Return(int64(3), nil)
+	cache.EXPECT().Get(gomock.Any(), gomock.Any()).Return(
+		[]byte(`[{"id":9,"title":"From cache","completed":true,"assignee":"Alex"}]`), true, nil,
+	)
+
+	tasks, err := taskService.List(dao.TaskFilter{}, dao.Cursor{})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if len(tasks) != 1 || tasks[0].ID != 9 || *tasks[0].Title != "From cache" ||
+		!*tasks[0].Completed || *tasks[0].Assignee != "Alex" {
+		t.Errorf("List() = %+v, want cached task 9", tasks)
+	}
 }

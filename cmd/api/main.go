@@ -9,6 +9,7 @@ import (
 	"os"
 	"time"
 
+	"task-manager/internal/cache"
 	"task-manager/internal/handler"
 	"task-manager/internal/repository"
 	"task-manager/internal/service"
@@ -17,6 +18,7 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/redis/go-redis/v9"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 )
 
@@ -50,6 +52,18 @@ func run() (runErr error) {
 	}
 	defer db.Close()
 
+	redisAddr := os.Getenv("REDIS_ADDR")
+	if redisAddr == "" {
+		redisAddr = "localhost:6379"
+	}
+	redisClient := redis.NewClient(&redis.Options{Addr: redisAddr})
+	taskListCache := cache.NewRedisTaskListCache(redisClient)
+	defer func() {
+		if err := taskListCache.Close(); err != nil {
+			runErr = errors.Join(runErr, fmt.Errorf("close Redis client: %w", err))
+		}
+	}()
+
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := db.PingContext(ctx); err != nil {
@@ -57,7 +71,7 @@ func run() (runErr error) {
 	}
 
 	taskRepository := repository.NewTaskRepository(db)
-	taskService := service.NewTaskService(taskRepository)
+	taskService := service.NewTaskService(taskRepository, taskListCache)
 	httpMetrics, shutdownMetrics, err := telemetry.InitMetrics(context.Background(), "task-manager")
 	if err != nil {
 		return fmt.Errorf("initialize metrics: %w", err)

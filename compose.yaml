@@ -5,13 +5,32 @@ services:
       DATABASE_URL: postgres://taskmanager:taskmanager@postgres:5432/taskmanager?sslmode=disable
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otelcol:4318
       OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+      REDIS_ADDR: redis:6379
     ports:
       - "9090:9090"
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
       otelcol:
         condition: service_started
+
+  redis:
+    command:
+      - --loglevel warning
+    container_name: redis
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    image: redis:7-alpine
+    labels:
+      namespace: redis
+    ports:
+      - "6379:6379"
+    restart: "no"
 
   otelcol:
     command: ["--config=/etc/otelcol-contrib/config.yaml"]

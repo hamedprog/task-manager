@@ -51,7 +51,7 @@ func TestTaskAPIIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create task count counter: %v", err)
 	}
-	NewTaskHandler(service.NewTaskService(repo), taskCount).RegisterRoutes(router)
+	NewTaskHandler(service.NewTaskService(repo, nil), taskCount).RegisterRoutes(router)
 
 	createResp := doRequest(t, router, http.MethodPost, "/tasks", `{"title":"Write integration test","assignee":"Alex"}`)
 	if createResp.Code != http.StatusCreated {
