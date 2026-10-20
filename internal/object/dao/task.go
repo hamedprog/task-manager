@@ -11,3 +11,8 @@ type TaskFilter struct {
 	Assignee  *string
 	Completed *bool
 }
+
+type Cursor struct {
+	Offset *int
+	Limit  *int
+}

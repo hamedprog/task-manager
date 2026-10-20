@@ -86,18 +86,18 @@ func (mr *MockTaskServiceMockRecorder) GetByID(id any) *gomock.Call {
 }
 
 // List mocks base method.
-func (m *MockTaskService) List(filter dao.TaskFilter) ([]bo.Task, error) {
+func (m *MockTaskService) List(filter dao.TaskFilter, cursor dao.Cursor) ([]bo.Task, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "List", filter)
+	ret := m.ctrl.Call(m, "List", filter, cursor)
 	ret0, _ := ret[0].([]bo.Task)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // List indicates an expected call of List.
-func (mr *MockTaskServiceMockRecorder) List(filter any) *gomock.Call {
+func (mr *MockTaskServiceMockRecorder) List(filter, cursor any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockTaskService)(nil).List), filter)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockTaskService)(nil).List), filter, cursor)
 }
 
 // Update mocks base method.
