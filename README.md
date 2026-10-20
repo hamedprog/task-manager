@@ -28,6 +28,16 @@ Then run:
 PYROSCOPE_SERVER_ADDRESS=http://localhost:4040 go run ./cmd/api
 ```
 
+To run the k6 load test against the API, install k6 and run:
+
+```sh
+make k6-test
+```
+
+The test ramps up to five virtual users, requests the task list, and reports
+latency and request-failure thresholds in the k6 output. Override the API URL
+with `make k6-test K6_TEST_BASE_URL=http://localhost:9090`.
+
 The API uses
 `postgres://taskmanager:taskmanager@localhost:5432/taskmanager?sslmode=disable`
 by default when run locally. Set `DATABASE_URL` to override it. The `tasks`

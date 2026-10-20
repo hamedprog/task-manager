@@ -87,7 +87,7 @@ services:
     labels:
       namespace: prometheus
     ports:
-      - "9091:9092"
+      - "9091:9090"
     restart: "no"
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
