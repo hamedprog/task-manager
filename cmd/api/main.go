@@ -41,6 +41,16 @@ func run() (runErr error) {
 		}
 	}()
 
+	shutdownProfiling, err := telemetry.InitProfiling("task-manager", os.Getenv("PYROSCOPE_SERVER_ADDRESS"))
+	if err != nil {
+		return fmt.Errorf("initialize profiling: %w", err)
+	}
+	defer func() {
+		if err := shutdownProfiling(); err != nil {
+			runErr = errors.Join(runErr, fmt.Errorf("shutdown profiling: %w", err))
+		}
+	}()
+
 	databaseURL := os.Getenv("DATABASE_URL")
 	if databaseURL == "" {
 		databaseURL = "postgres://taskmanager:taskmanager@localhost:5432/taskmanager?sslmode=disable"
