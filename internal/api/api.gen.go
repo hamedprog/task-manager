@@ -37,6 +37,12 @@ type UpdateTaskRequest struct {
 	Title     *string `json:"title,omitempty"`
 }
 
+// ListTasksParams defines parameters for ListTasks.
+type ListTasksParams struct {
+	Assignee  *string `form:"assignee,omitempty" json:"assignee,omitempty"`
+	Completed *bool   `form:"completed,omitempty" json:"completed,omitempty"`
+}
+
 // CreateTaskJSONRequestBody defines body for CreateTask for application/json ContentType.
 type CreateTaskJSONRequestBody = CreateTaskRequest
 
@@ -47,7 +53,7 @@ type UpdateTaskJSONRequestBody = UpdateTaskRequest
 type ServerInterface interface {
 	// List tasks
 	// (GET /tasks)
-	ListTasks(c *gin.Context)
+	ListTasks(c *gin.Context, params ListTasksParams)
 	// Create a task
 	// (POST /tasks)
 	CreateTask(c *gin.Context)
@@ -74,6 +80,27 @@ type MiddlewareFunc func(c *gin.Context)
 // ListTasks operation middleware
 func (siw *ServerInterfaceWrapper) ListTasks(c *gin.Context) {
 
+	var err error
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListTasksParams
+
+	// ------------- Optional query parameter "assignee" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "assignee", c.Request.URL.Query(), &params.Assignee)
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter assignee: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	// ------------- Optional query parameter "completed" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "completed", c.Request.URL.Query(), &params.Completed)
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter completed: %w", err), http.StatusBadRequest)
+		return
+	}
+
 	for _, middleware := range siw.HandlerMiddlewares {
 		middleware(c)
 		if c.IsAborted() {
@@ -81,7 +108,7 @@ func (siw *ServerInterfaceWrapper) ListTasks(c *gin.Context) {
 		}
 	}
 
-	siw.Handler.ListTasks(c)
+	siw.Handler.ListTasks(c, params)
 }
 
 // CreateTask operation middleware

@@ -62,6 +62,8 @@ task_manager_tasks_count_total
 The OpenAPI 3 contract is maintained in `api/openapi.yaml`. Generated request
 and response types and Gin route bindings are written to `internal/api/` using
 `codgen.yaml`.
+The task list endpoint accepts optional `assignee` and `completed` query
+parameters, for example `GET /tasks?assignee=Alex&completed=false`.
 
 Regenerate API code and repository mocks with:
 

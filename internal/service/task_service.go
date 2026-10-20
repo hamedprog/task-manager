@@ -12,7 +12,7 @@ var ErrTaskNotFound = errors.New("task not found")
 
 type TaskRepository interface {
 	Create(task *dao.Task) error
-	List() ([]dao.Task, error)
+	List(filter dao.TaskFilter) ([]dao.Task, error)
 	GetByID(id int) (*dao.Task, error)
 	Update(task *dao.Task) error
 	Delete(id int) error
@@ -47,8 +47,8 @@ func (s *TaskService) Create(boTask bo.Task) (*bo.Task, error) {
 	return toBusinessTask(daoTask), nil
 }
 
-func (s *TaskService) List() ([]bo.Task, error) {
-	daoTasks, err := s.repository.List()
+func (s *TaskService) List(filter dao.TaskFilter) ([]bo.Task, error) {
+	daoTasks, err := s.repository.List(filter)
 	if err != nil {
 		return nil, err
 	}

@@ -2,9 +2,11 @@ package handler
 
 import (
 	"net/http"
+	"strings"
 
 	"task-manager/internal/api"
 	"task-manager/internal/object/bo"
+	"task-manager/internal/object/dao"
 
 	"github.com/gin-gonic/gin"
 	"go.opentelemetry.io/otel/metric"
@@ -12,7 +14,7 @@ import (
 
 type TaskService interface {
 	Create(task bo.Task) (*bo.Task, error)
-	List() ([]bo.Task, error)
+	List(filter dao.TaskFilter) ([]bo.Task, error)
 	GetByID(id int) (*bo.Task, error)
 	Update(task bo.Task) (*bo.Task, error)
 	Delete(id int) error
@@ -29,8 +31,12 @@ func NewTaskHandler(service TaskService, taskCount metric.Int64Counter) *TaskHan
 
 func (h *TaskHandler) RegisterRoutes(router gin.IRouter) {
 	api.RegisterHandlersWithOptions(router, h, api.GinServerOptions{
-		ErrorHandler: func(c *gin.Context, _ error, statusCode int) {
-			c.JSON(statusCode, api.Error{Error: "invalid task ID"})
+		ErrorHandler: func(c *gin.Context, err error, statusCode int) {
+			message := "invalid task filter"
+			if strings.Contains(err.Error(), "parameter id") {
+				message = "invalid task ID"
+			}
+			c.JSON(statusCode, api.Error{Error: message})
 		},
 	})
 }
@@ -67,8 +73,9 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 	c.JSON(http.StatusCreated, apiTask)
 }
 
-func (h *TaskHandler) ListTasks(c *gin.Context) {
-	boTasks, err := h.service.List()
+func (h *TaskHandler) ListTasks(c *gin.Context, params api.ListTasksParams) {
+	filter := dao.TaskFilter{Assignee: params.Assignee, Completed: params.Completed}
+	boTasks, err := h.service.List(filter)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, api.Error{Error: "failed to list tasks"})
 		return

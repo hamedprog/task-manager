@@ -12,6 +12,7 @@ package handler
 import (
 	reflect "reflect"
 	bo "task-manager/internal/object/bo"
+	dao "task-manager/internal/object/dao"
 
 	gomock "go.uber.org/mock/gomock"
 )
@@ -85,18 +86,18 @@ func (mr *MockTaskServiceMockRecorder) GetByID(id any) *gomock.Call {
 }
 
 // List mocks base method.
-func (m *MockTaskService) List() ([]bo.Task, error) {
+func (m *MockTaskService) List(filter dao.TaskFilter) ([]bo.Task, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "List")
+	ret := m.ctrl.Call(m, "List", filter)
 	ret0, _ := ret[0].([]bo.Task)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // List indicates an expected call of List.
-func (mr *MockTaskServiceMockRecorder) List() *gomock.Call {
+func (mr *MockTaskServiceMockRecorder) List(filter any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockTaskService)(nil).List))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockTaskService)(nil).List), filter)
 }
 
 // Update mocks base method.

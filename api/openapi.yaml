@@ -12,6 +12,17 @@ paths:
       summary: List tasks
       tags:
         - Tasks
+      parameters:
+        - name: assignee
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: completed
+          in: query
+          required: false
+          schema:
+            type: boolean
       responses:
         "200":
           description: Tasks retrieved
