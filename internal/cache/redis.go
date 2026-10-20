@@ -11,15 +11,15 @@ import (
 const taskListVersionKey = "tasks:list:version"
 
 type RedisTaskListCache struct {
-	client *redis.Client
+	redisClient *redis.Client
 }
 
-func NewRedisTaskListCache(client *redis.Client) *RedisTaskListCache {
-	return &RedisTaskListCache{client: client}
+func NewRedisTaskListCache(redisClient *redis.Client) *RedisTaskListCache {
+	return &RedisTaskListCache{redisClient: redisClient}
 }
 
 func (c *RedisTaskListCache) Version(ctx context.Context) (int64, error) {
-	version, err := c.client.Get(ctx, taskListVersionKey).Int64()
+	version, err := c.redisClient.Get(ctx, taskListVersionKey).Int64()
 	if errors.Is(err, redis.Nil) {
 		return 0, nil
 	}
@@ -27,7 +27,7 @@ func (c *RedisTaskListCache) Version(ctx context.Context) (int64, error) {
 }
 
 func (c *RedisTaskListCache) Get(ctx context.Context, key string) ([]byte, bool, error) {
-	value, err := c.client.Get(ctx, key).Bytes()
+	value, err := c.redisClient.Get(ctx, key).Bytes()
 	if errors.Is(err, redis.Nil) {
 		return nil, false, nil
 	}
@@ -38,13 +38,13 @@ func (c *RedisTaskListCache) Get(ctx context.Context, key string) ([]byte, bool,
 }
 
 func (c *RedisTaskListCache) Set(ctx context.Context, key string, value []byte, ttl time.Duration) error {
-	return c.client.Set(ctx, key, value, ttl).Err()
+	return c.redisClient.Set(ctx, key, value, ttl).Err()
 }
 
 func (c *RedisTaskListCache) Invalidate(ctx context.Context) error {
-	return c.client.Incr(ctx, taskListVersionKey).Err()
+	return c.redisClient.Incr(ctx, taskListVersionKey).Err()
 }
 
 func (c *RedisTaskListCache) Close() error {
-	return c.client.Close()
+	return c.redisClient.Close()
 }

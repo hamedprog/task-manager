@@ -14,35 +14,35 @@ import (
 func TestHTTPMetrics(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	reader := sdkmetric.NewManualReader()
-	provider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
-	defer provider.Shutdown(context.Background())
+	manualReader := sdkmetric.NewManualReader()
+	meterProvider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(manualReader))
+	defer meterProvider.Shutdown(context.Background())
 
-	metrics, err := newHTTPMetrics(provider.Meter("test"))
+	httpMetrics, err := newHTTPMetrics(meterProvider.Meter("test"))
 	if err != nil {
 		t.Fatalf("create metrics: %v", err)
 	}
 
 	router := gin.New()
-	router.Use(metrics.Middleware())
-	router.GET("/tasks", func(c *gin.Context) {
-		c.Status(http.StatusOK)
+	router.Use(httpMetrics.Middleware())
+	router.GET("/tasks", func(ginContext *gin.Context) {
+		ginContext.Status(http.StatusOK)
 	})
-	response := httptest.NewRecorder()
-	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/tasks", nil))
+	responseRecorder := httptest.NewRecorder()
+	router.ServeHTTP(responseRecorder, httptest.NewRequest(http.MethodGet, "/tasks", nil))
 
-	if response.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
+	if responseRecorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", responseRecorder.Code, http.StatusOK)
 	}
-	metrics.TaskCount.Add(context.Background(), 1)
+	httpMetrics.TaskCount.Add(context.Background(), 1)
 
-	var collected metricdata.ResourceMetrics
-	if err := reader.Collect(context.Background(), &collected); err != nil {
+	var resourceMetrics metricdata.ResourceMetrics
+	if err := manualReader.Collect(context.Background(), &resourceMetrics); err != nil {
 		t.Fatalf("collect metrics: %v", err)
 	}
 
 	found := map[string]bool{}
-	for _, scope := range collected.ScopeMetrics {
+	for _, scope := range resourceMetrics.ScopeMetrics {
 		for _, metric := range scope.Metrics {
 			switch data := metric.Data.(type) {
 			case metricdata.Sum[int64]:

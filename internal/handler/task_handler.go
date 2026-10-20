@@ -13,53 +13,53 @@ import (
 )
 
 type TaskService interface {
-	Create(task bo.Task) (*bo.Task, error)
-	List(filter dao.TaskFilter, cursor dao.Cursor) ([]bo.Task, error)
+	Create(boTask bo.Task) (*bo.Task, error)
+	List(daoTaskFilter dao.TaskFilter, daoCursor dao.Cursor) ([]bo.Task, error)
 	GetByID(id int) (*bo.Task, error)
-	Update(task bo.Task) (*bo.Task, error)
+	Update(boTask bo.Task) (*bo.Task, error)
 	Delete(id int) error
 }
 
 type TaskHandler struct {
-	service   TaskService
-	taskCount metric.Int64Counter
+	taskService TaskService
+	taskCount   metric.Int64Counter
 }
 
-func NewTaskHandler(service TaskService, taskCount metric.Int64Counter) *TaskHandler {
-	return &TaskHandler{service: service, taskCount: taskCount}
+func NewTaskHandler(TaskService TaskService, taskCount metric.Int64Counter) *TaskHandler {
+	return &TaskHandler{taskService: TaskService, taskCount: taskCount}
 }
 
 func (h *TaskHandler) RegisterRoutes(router gin.IRouter) {
 	api.RegisterHandlersWithOptions(router, h, api.GinServerOptions{
-		ErrorHandler: func(c *gin.Context, err error, statusCode int) {
+		ErrorHandler: func(ginContext *gin.Context, err error, statusCode int) {
 			message := "invalid task filter"
 			if strings.Contains(err.Error(), "parameter id") {
 				message = "invalid task ID"
 			}
-			c.JSON(statusCode, api.Error{Error: message})
+			ginContext.JSON(statusCode, api.Error{Error: message})
 		},
 	})
 }
 
-func (h *TaskHandler) CreateTask(c *gin.Context) {
-	var req api.CreateTaskRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, api.Error{Error: err.Error()})
+func (h *TaskHandler) CreateTask(ginContext *gin.Context) {
+	var apiCreateTaskRequest api.CreateTaskRequest
+	if err := ginContext.ShouldBindJSON(&apiCreateTaskRequest); err != nil {
+		ginContext.JSON(http.StatusBadRequest, api.Error{Error: err.Error()})
 		return
 	}
 
 	assignee := ""
-	if req.Assignee != nil {
-		assignee = *req.Assignee
+	if apiCreateTaskRequest.Assignee != nil {
+		assignee = *apiCreateTaskRequest.Assignee
 	}
 
-	boTask, err := h.service.Create(bo.Task{Title: &req.Title, Assignee: &assignee})
+	boTask, err := h.taskService.Create(bo.Task{Title: &apiCreateTaskRequest.Title, Assignee: &assignee})
 	if err != nil {
 		if err.Error() == "title cannot be empty" {
-			c.JSON(http.StatusBadRequest, api.Error{Error: err.Error()})
+			ginContext.JSON(http.StatusBadRequest, api.Error{Error: err.Error()})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, api.Error{Error: "failed to create task"})
+		ginContext.JSON(http.StatusInternalServerError, api.Error{Error: "failed to create task"})
 		return
 	}
 
@@ -70,28 +70,28 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 		Assignee:  *boTask.Assignee,
 	}
 
-	c.JSON(http.StatusCreated, apiTask)
+	ginContext.JSON(http.StatusCreated, apiTask)
 }
 
-func (h *TaskHandler) ListTasks(c *gin.Context, params api.ListTasksParams) {
-	if params.Offset != nil && *params.Offset < 0 {
-		c.JSON(http.StatusBadRequest, api.Error{Error: "offset must be non-negative"})
+func (h *TaskHandler) ListTasks(ginContext *gin.Context, apiListTasksParams api.ListTasksParams) {
+	if apiListTasksParams.Offset != nil && *apiListTasksParams.Offset < 0 {
+		ginContext.JSON(http.StatusBadRequest, api.Error{Error: "offset must be non-negative"})
 		return
 	}
-	if params.Limit != nil && *params.Limit < 1 {
-		c.JSON(http.StatusBadRequest, api.Error{Error: "limit must be positive"})
+	if apiListTasksParams.Limit != nil && *apiListTasksParams.Limit < 1 {
+		ginContext.JSON(http.StatusBadRequest, api.Error{Error: "limit must be positive"})
 		return
 	}
 
-	filter := dao.TaskFilter{Assignee: params.Assignee, Completed: params.Completed}
-	cursor := dao.Cursor{Offset: params.Offset, Limit: params.Limit}
-	boTasks, err := h.service.List(filter, cursor)
+	daoTaskFilter := dao.TaskFilter{Assignee: apiListTasksParams.Assignee, Completed: apiListTasksParams.Completed}
+	daoCursor := dao.Cursor{Offset: apiListTasksParams.Offset, Limit: apiListTasksParams.Limit}
+	boTasks, err := h.taskService.List(daoTaskFilter, daoCursor)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, api.Error{Error: "failed to list tasks"})
+		ginContext.JSON(http.StatusInternalServerError, api.Error{Error: "failed to list tasks"})
 		return
 	}
 
-	h.taskCount.Add(c.Request.Context(), int64(len(boTasks)))
+	h.taskCount.Add(ginContext.Request.Context(), int64(len(boTasks)))
 
 	apiTasks := make([]api.Task, 0, len(boTasks))
 	for _, task := range boTasks {
@@ -103,18 +103,18 @@ func (h *TaskHandler) ListTasks(c *gin.Context, params api.ListTasksParams) {
 		})
 	}
 
-	c.JSON(http.StatusOK, apiTasks)
+	ginContext.JSON(http.StatusOK, apiTasks)
 }
 
-func (h *TaskHandler) GetTask(c *gin.Context, id int) {
+func (h *TaskHandler) GetTask(ginContext *gin.Context, id int) {
 	if id < 1 {
-		c.JSON(http.StatusBadRequest, api.Error{Error: "invalid task ID"})
+		ginContext.JSON(http.StatusBadRequest, api.Error{Error: "invalid task ID"})
 		return
 	}
 
-	boTask, err := h.service.GetByID(id)
+	boTask, err := h.taskService.GetByID(id)
 	if err != nil {
-		c.JSON(http.StatusNotFound, api.Error{Error: "task not found"})
+		ginContext.JSON(http.StatusNotFound, api.Error{Error: "task not found"})
 		return
 	}
 
@@ -125,27 +125,27 @@ func (h *TaskHandler) GetTask(c *gin.Context, id int) {
 		Assignee:  *boTask.Assignee,
 	}
 
-	c.JSON(http.StatusOK, apiTask)
+	ginContext.JSON(http.StatusOK, apiTask)
 }
 
-func (h *TaskHandler) UpdateTask(c *gin.Context, id int) {
+func (h *TaskHandler) UpdateTask(ginContext *gin.Context, id int) {
 	if id < 1 {
-		c.JSON(http.StatusBadRequest, api.Error{Error: "invalid task ID"})
+		ginContext.JSON(http.StatusBadRequest, api.Error{Error: "invalid task ID"})
 		return
 	}
 
 	var apiUpdateTaskRequest api.UpdateTaskRequest
-	if err := c.ShouldBindJSON(&apiUpdateTaskRequest); err != nil {
-		c.JSON(http.StatusBadRequest, api.Error{Error: err.Error()})
+	if err := ginContext.ShouldBindJSON(&apiUpdateTaskRequest); err != nil {
+		ginContext.JSON(http.StatusBadRequest, api.Error{Error: err.Error()})
 		return
 	}
 
 	if apiUpdateTaskRequest.Title == nil && apiUpdateTaskRequest.Completed == nil && apiUpdateTaskRequest.Assignee == nil {
-		c.JSON(http.StatusBadRequest, api.Error{Error: "no fields to update"})
+		ginContext.JSON(http.StatusBadRequest, api.Error{Error: "no fields to update"})
 		return
 	}
 
-	boTask, err := h.service.Update(bo.Task{
+	boTask, err := h.taskService.Update(bo.Task{
 		ID:        id,
 		Title:     apiUpdateTaskRequest.Title,
 		Completed: apiUpdateTaskRequest.Completed,
@@ -153,14 +153,14 @@ func (h *TaskHandler) UpdateTask(c *gin.Context, id int) {
 	})
 	if err != nil {
 		if err.Error() == "title cannot be empty" {
-			c.JSON(http.StatusBadRequest, api.Error{Error: err.Error()})
+			ginContext.JSON(http.StatusBadRequest, api.Error{Error: err.Error()})
 			return
 		}
 		if err.Error() == "task not found" {
-			c.JSON(http.StatusNotFound, api.Error{Error: "task not found"})
+			ginContext.JSON(http.StatusNotFound, api.Error{Error: "task not found"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, api.Error{Error: "failed to update task"})
+		ginContext.JSON(http.StatusInternalServerError, api.Error{Error: "failed to update task"})
 		return
 	}
 
@@ -171,19 +171,19 @@ func (h *TaskHandler) UpdateTask(c *gin.Context, id int) {
 		Assignee:  *boTask.Assignee,
 	}
 
-	c.JSON(http.StatusOK, aptTask)
+	ginContext.JSON(http.StatusOK, aptTask)
 }
 
-func (h *TaskHandler) DeleteTask(c *gin.Context, id int) {
+func (h *TaskHandler) DeleteTask(ginContext *gin.Context, id int) {
 	if id < 1 {
-		c.JSON(http.StatusBadRequest, api.Error{Error: "invalid task ID"})
+		ginContext.JSON(http.StatusBadRequest, api.Error{Error: "invalid task ID"})
 		return
 	}
 
-	if err := h.service.Delete(id); err != nil {
-		c.JSON(http.StatusNotFound, api.Error{Error: "task not found"})
+	if err := h.taskService.Delete(id); err != nil {
+		ginContext.JSON(http.StatusNotFound, api.Error{Error: "task not found"})
 		return
 	}
 
-	c.Status(http.StatusNoContent)
+	ginContext.Status(http.StatusNoContent)
 }
